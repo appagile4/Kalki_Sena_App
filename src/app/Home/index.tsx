@@ -6,17 +6,17 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 
 // Reusable Components
+import HomeHeader from "../../components/Home/HomeHeader";
+import HeroBanner from "../../components/Home/HeroBanner";
+import CategoryGrid from "../../components/Home/CategoryGrid";
+import PromoCards from "../../components/Home/PromoCards";
+import ServiceList from "../../components/Home/ServiceList";
+import SocialLinks from "../../components/Home/SocialLinks";
 import {
-  HomeHeader,
-  HeroBanner,
-  CategoryGrid,
-  PromoCards,
-  ServiceList,
-  SocialLinks,
   QuickActionItem,
   CommunityProgramItem,
   ServiceItem,
-} from "../../components/Home";
+} from "../../components/Home/types";
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();

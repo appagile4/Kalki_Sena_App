@@ -1,1 +1,6 @@
-export { default } from "../../Screens/GridSection/JoinKalki/joinkalki";
+import React from "react";
+import JoinKalkiScreen from "../../Screens/GridSection/JoinKalki/joinkalki";
+
+export default function JoinKalkiRoute() {
+  return <JoinKalkiScreen />;
+}

@@ -1,1 +1,6 @@
-export { default } from "../../Screens/ServiceList/RentVehicle/rentVehicle";
+import React from "react";
+import RentVehicleScreen from "../../Screens/ServiceList/RentVehicle/rentVehicle";
+
+export default function RentVehicleRoute() {
+  return <RentVehicleScreen />;
+}
