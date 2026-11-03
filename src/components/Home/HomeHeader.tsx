@@ -8,6 +8,7 @@ interface HomeHeaderProps {
   userName?: string;
   greeting?: string;
   avatarUri?: string;
+  onProfilePress?: () => void;
   onScannerPress?: () => void;
   onNotificationPress?: () => void;
   onLogoutPress?: () => void;
@@ -42,6 +43,7 @@ export default function HomeHeader({
   userName = "Subhodip",
   greeting = "Namaste",
   avatarUri,
+  onProfilePress,
   onScannerPress,
   onNotificationPress,
   onLogoutPress,
@@ -55,7 +57,11 @@ export default function HomeHeader({
   return (
     <View style={styles.container}>
       {/* User Info (Avatar + Greeting) */}
-      <View style={styles.userSection}>
+      <TouchableOpacity
+        style={styles.userSection}
+        activeOpacity={0.8}
+        onPress={onProfilePress}
+      >
         <View style={styles.avatarBorder}>
           <Image
             source={avatarSource}
@@ -68,7 +74,7 @@ export default function HomeHeader({
           <Text style={styles.greetingText}>{greeting}</Text>
           <Text style={styles.userNameText}>{userName}</Text>
         </View>
-      </View>
+      </TouchableOpacity>
 
       {/* Action Buttons (QR Scanner + Notification Bell + Custom SVG Logout) */}
       <View style={styles.actionsSection}>

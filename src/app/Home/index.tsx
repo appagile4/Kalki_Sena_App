@@ -23,6 +23,10 @@ export default function HomeScreen() {
   const router = useRouter();
 
   // Handlers for interactions
+  const handleProfilePress = () => {
+    router.push("/Home/profile" as any);
+  };
+
   const handleScannerPress = () => {
     router.push("/Home/donate" as any);
   };
@@ -185,6 +189,7 @@ export default function HomeScreen() {
         <HomeHeader
           userName="Subhodip"
           greeting="Namaste"
+          onProfilePress={handleProfilePress}
           onScannerPress={handleScannerPress}
           onNotificationPress={handleNotificationPress}
           onLogoutPress={handleLogoutPress}
@@ -215,8 +220,10 @@ export default function HomeScreen() {
         {/* 5. Our Services List */}
         <ServiceList onServicePress={handleServicePress} />
 
-        {/* 6. Social Media Channels */}
-        <SocialLinks />
+        {/* 6. Social Media & SOS Channels */}
+        <SocialLinks
+          onSosPress={() => router.push("/Home/emergencySOS" as any)}
+        />
       </ScrollView>
     </View>
   );

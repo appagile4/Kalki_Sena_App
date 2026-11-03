@@ -1,11 +1,13 @@
 import React from "react";
-import { StyleSheet, View, TouchableOpacity, Linking } from "react-native";
+import { StyleSheet, View, TouchableOpacity, Linking, Text } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 
 interface SocialLinksProps {
   onWhatsAppPress?: () => void;
   onInstagramPress?: () => void;
+  onSosPress?: () => void;
   onFacebookPress?: () => void;
   onYouTubePress?: () => void;
 }
@@ -13,9 +15,12 @@ interface SocialLinksProps {
 export default function SocialLinks({
   onWhatsAppPress,
   onInstagramPress,
+  onSosPress,
   onFacebookPress,
   onYouTubePress,
 }: SocialLinksProps) {
+  const router = useRouter();
+
   const handleWhatsApp = () => {
     if (onWhatsAppPress) {
       onWhatsAppPress();
@@ -29,6 +34,14 @@ export default function SocialLinks({
       onInstagramPress();
     } else {
       Linking.openURL("https://instagram.com").catch(() => {});
+    }
+  };
+
+  const handleSos = () => {
+    if (onSosPress) {
+      onSosPress();
+    } else {
+      router.push("/Home/emergencySOS" as any);
     }
   };
 
@@ -56,7 +69,7 @@ export default function SocialLinks({
         activeOpacity={0.8}
         onPress={handleWhatsApp}
       >
-        <Ionicons name="logo-whatsapp" size={30} color="#FFFFFF" />
+        <Ionicons name="logo-whatsapp" size={28} color="#FFFFFF" />
       </TouchableOpacity>
 
       {/* 2. Instagram Button (Gradient) */}
@@ -71,26 +84,37 @@ export default function SocialLinks({
           end={{ x: 1, y: 1 }}
           style={styles.gradientFill}
         >
-          <Ionicons name="logo-instagram" size={28} color="#FFFFFF" />
+          <Ionicons name="logo-instagram" size={26} color="#FFFFFF" />
         </LinearGradient>
       </TouchableOpacity>
 
-      {/* 3. Facebook Button */}
+      {/* 3. SOS Button (Center) */}
+      <TouchableOpacity
+        style={[styles.socialButton, styles.sosButton]}
+        activeOpacity={0.85}
+        onPress={handleSos}
+      >
+        <View style={styles.sosInnerRing}>
+          <Text style={styles.sosText}>SOS</Text>
+        </View>
+      </TouchableOpacity>
+
+      {/* 4. Facebook Button */}
       <TouchableOpacity
         style={[styles.socialButton, styles.facebookButton]}
         activeOpacity={0.8}
         onPress={handleFacebook}
       >
-        <Ionicons name="logo-facebook" size={28} color="#FFFFFF" />
+        <Ionicons name="logo-facebook" size={26} color="#FFFFFF" />
       </TouchableOpacity>
 
-      {/* 4. YouTube Button */}
+      {/* 5. YouTube Button */}
       <TouchableOpacity
         style={[styles.socialButton, styles.youtubeButton]}
         activeOpacity={0.8}
         onPress={handleYouTube}
       >
-        <Ionicons name="logo-youtube" size={28} color="#FFFFFF" />
+        <Ionicons name="logo-youtube" size={26} color="#FFFFFF" />
       </TouchableOpacity>
     </View>
   );
@@ -101,13 +125,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    gap: 20,
+    gap: 14,
     marginVertical: 18,
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
   },
   socialButton: {
-    width: 52,
-    height: 52,
+    width: 48,
+    height: 48,
     borderRadius: 14,
     overflow: "hidden",
     alignItems: "center",
@@ -127,9 +151,30 @@ const styles = StyleSheet.create({
   whatsappButton: {
     backgroundColor: "#25D366",
   },
+  sosButton: {
+    backgroundColor: "#E5252A",
+    borderRadius: 24,
+    borderWidth: 1.5,
+    borderColor: "#E5252A",
+  },
+  sosInnerRing: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 1.5,
+    borderColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sosText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "900",
+    letterSpacing: 0.5,
+  },
   facebookButton: {
     backgroundColor: "#1877F2",
-    borderRadius: 26,
+    borderRadius: 24,
   },
   youtubeButton: {
     backgroundColor: "#FF0000",
