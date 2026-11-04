@@ -48,7 +48,19 @@ const GmailIcon = ({ size = 20 }: { size?: number }) => {
   );
 };
 
-export default function OnBoardingScreen() {
+interface OnBoardingScreenProps {
+  onSkip?: () => void;
+  onLogIn?: () => void;
+  onCreateAccount?: () => void;
+  onGmailSignUp?: () => void;
+}
+
+export default function OnBoardingScreen({
+  onSkip,
+  onLogIn,
+  onCreateAccount,
+  onGmailSignUp,
+}: OnBoardingScreenProps = {}) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
@@ -137,16 +149,36 @@ export default function OnBoardingScreen() {
     return () => clearTimeout(timer);
   }, []);
 
+  const handleSkip = () => {
+    if (onSkip) {
+      onSkip();
+    } else {
+      router.replace("/Home" as any);
+    }
+  };
+
   const handleLogIn = () => {
-    router.push("/Auth/login");
+    if (onLogIn) {
+      onLogIn();
+    } else {
+      router.push("/Auth/login");
+    }
   };
 
   const handleCreateAccount = () => {
-    router.push("/Auth/signup");
+    if (onCreateAccount) {
+      onCreateAccount();
+    } else {
+      router.push("/Auth/signup");
+    }
   };
 
   const handleGmailSignUp = () => {
-    router.push("/Auth/signup");
+    if (onGmailSignUp) {
+      onGmailSignUp();
+    } else {
+      router.push("/Auth/signup");
+    }
   };
 
   return (
@@ -159,6 +191,26 @@ export default function OnBoardingScreen() {
         locations={[0, 0.35, 0.7, 1]}
         style={StyleSheet.absoluteFill}
       />
+
+      {/* Skip Button at Top Right Corner */}
+      <Animated.View
+        style={[
+          styles.skipButtonContainer,
+          {
+            top: (insets.top || (Platform.OS === "android" ? 36 : 48)) + 8,
+            opacity: contentOpacity,
+          },
+        ]}
+      >
+        <TouchableOpacity
+          style={styles.skipButton}
+          activeOpacity={0.7}
+          onPress={handleSkip}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
+          <Text style={styles.skipButtonText}>Skip</Text>
+        </TouchableOpacity>
+      </Animated.View>
 
       {/* Animated Kalki Sena Drive Logo (Absolute layer for precise positioning) */}
       <Animated.View
@@ -271,6 +323,27 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#020b18",
+  },
+  skipButtonContainer: {
+    position: "absolute",
+    right: 18,
+    zIndex: 50,
+  },
+  skipButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderRadius: 18,
+    backgroundColor: "rgba(6, 27, 54, 0.75)",
+    borderWidth: 1,
+    borderColor: "#183B68",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  skipButtonText: {
+    color: "#FFFFFF",
+    fontSize: 13.5,
+    fontWeight: "600",
+    letterSpacing: 0.3,
   },
   logoAbsoluteContainer: {
     position: "absolute",
