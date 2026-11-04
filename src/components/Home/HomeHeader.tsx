@@ -1,7 +1,15 @@
+import React, { useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Image } from "expo-image";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  Modal,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import QRCode from "react-native-qrcode-svg";
 import Svg, { Path } from "react-native-svg";
 
 interface HomeHeaderProps {
@@ -13,6 +21,7 @@ interface HomeHeaderProps {
   onNotificationPress?: () => void;
   onLogoutPress?: () => void;
   onReloadPress?: () => void;
+  qrValue?: string;
 }
 
 // Custom SVG Logout Icon matching the design image exactly
@@ -48,11 +57,20 @@ export default function HomeHeader({
   onNotificationPress,
   onLogoutPress,
   onReloadPress,
+  qrValue = "https://kalkisenadrive.com/donate",
 }: HomeHeaderProps) {
+  const [qrModalVisible, setQrModalVisible] = useState(false);
   const handleLogoutAction = onLogoutPress || onReloadPress;
   const avatarSource = avatarUri
     ? { uri: avatarUri }
     : require("../../../assets/images/avatar.png");
+
+  const handleScannerAction = () => {
+    setQrModalVisible(true);
+    if (onScannerPress) {
+      onScannerPress();
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -81,7 +99,7 @@ export default function HomeHeader({
         <TouchableOpacity
           style={styles.actionButton}
           activeOpacity={0.7}
-          onPress={onScannerPress}
+          onPress={handleScannerAction}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <MaterialIcons name="qr-code-scanner" size={24} color="#ffff" />
@@ -106,6 +124,46 @@ export default function HomeHeader({
           <LogoutIcon size={21} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
+
+      {/* QR Code Modal */}
+      <Modal
+        visible={qrModalVisible}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setQrModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          {/* Backdrop click to dismiss */}
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setQrModalVisible(false)}
+          />
+
+          {/* Center Card */}
+          <View style={styles.modalCard}>
+            {/* White QR Container */}
+            <View style={styles.qrContainer}>
+              <QRCode
+                value={qrValue}
+                size={220}
+                color="#000000"
+                backgroundColor="#FFFFFF"
+              />
+            </View>
+
+            {/* Close Button */}
+            <TouchableOpacity
+              style={styles.closeButton}
+              activeOpacity={0.8}
+              onPress={() => setQrModalVisible(false)}
+            >
+              <Text style={styles.closeButtonText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -164,5 +222,50 @@ const styles = StyleSheet.create({
     borderColor: "#12345F",
     alignItems: "center",
     justifyContent: "center",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.75)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 24,
+  },
+  modalCard: {
+    width: "100%",
+    maxWidth: 320,
+    backgroundColor: "#071B36",
+    borderRadius: 20,
+    borderWidth: 1.2,
+    borderColor: "#0F2E59",
+    padding: 20,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.5,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  qrContainer: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    padding: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+  },
+  closeButton: {
+    marginTop: 18,
+    width: "100%",
+    height: 48,
+    backgroundColor: "#1E78E5",
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  closeButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "600",
+    letterSpacing: 0.3,
   },
 });

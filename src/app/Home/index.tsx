@@ -27,10 +27,6 @@ export default function HomeScreen() {
     router.push("/Home/profile" as any);
   };
 
-  const handleScannerPress = () => {
-    router.push("/Home/donate" as any);
-  };
-
   const handleNotificationPress = () => {
     router.push("/Home/notifications" as any);
   };
@@ -190,7 +186,6 @@ export default function HomeScreen() {
           userName="Subhodip"
           greeting="Namaste"
           onProfilePress={handleProfilePress}
-          onScannerPress={handleScannerPress}
           onNotificationPress={handleNotificationPress}
           onLogoutPress={handleLogoutPress}
         />
