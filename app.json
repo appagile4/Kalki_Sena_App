@@ -10,10 +10,7 @@
     "ios": {
       "bundleIdentifier": "com.agileapp977.kalkisenadrive",
       "googleServicesFile": "./GoogleService-Info.plist",
-      "icon": "./assets/expo.icon",
-      "config": {
-        "googleMapsApiKey": "AIzaSyBxnSInFpg3Ds3frC6HUBA9xOyBJ0ftx3U"
-      }
+      "icon": "./assets/expo.icon"
     },
     "android": {
       "adaptiveIcon": {
@@ -28,12 +25,7 @@
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION"
       ],
-      "package": "com.agileapp977.Kalki_Sena_Drive",
-      "config": {
-        "googleMaps": {
-          "apiKey": "AIzaSyBxnSInFpg3Ds3frC6HUBA9xOyBJ0ftx3U"
-        }
-      }
+      "package": "com.agileapp977.Kalki_Sena_Drive"
     },
     "web": {
       "output": "server",

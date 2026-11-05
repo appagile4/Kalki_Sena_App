@@ -1,20 +1,20 @@
-import { Ionicons } from "@expo/vector-icons";
-import { Image } from "expo-image";
-import { LinearGradient } from "expo-linear-gradient";
-import { StatusBar } from "expo-status-bar";
-import { useEffect, useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
-  ActivityIndicator,
-  Dimensions,
-  Modal,
-  Platform,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
+  TouchableOpacity,
+  Modal,
+  Dimensions,
+  Platform,
+  Linking,
 } from "react-native";
+import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
+import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { WebView } from "react-native-webview";
+import * as WebBrowser from "expo-web-browser";
 import { apiService } from "../../services/api";
 
 export interface PromoCardsProps {
@@ -26,8 +26,6 @@ export interface PromoCardsProps {
   onBuyBookPress?: () => void;
 }
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
-
 export default function PromoCards({
   videoTitle = "Message form MR.666",
   videoThumbnail = "https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=600&auto=format&fit=crop&q=80",
@@ -38,7 +36,6 @@ export default function PromoCards({
 }: PromoCardsProps) {
   const insets = useSafeAreaInsets();
   const [isFullScreen, setIsFullScreen] = useState(false);
-  const [videoLoaded, setVideoLoaded] = useState(false);
 
   // Real-time backend video & book sync
   const [backendPromo, setBackendPromo] = useState<any>(null);
@@ -49,13 +46,7 @@ export default function PromoCards({
     const fetchPromoData = async () => {
       try {
         const res = await apiService.getBookDetails();
-        if (
-          res &&
-          res.success &&
-          res.data &&
-          res.data.length > 0 &&
-          isMounted
-        ) {
+        if (res && res.success && res.data && res.data.length > 0 && isMounted) {
           const book = res.data[0];
           if (book.promoVideo) {
             setBackendPromo(book.promoVideo);
@@ -89,62 +80,32 @@ export default function PromoCards({
     videoUrl ||
     "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
   const effectiveBookTitle =
-    bookTitle || backendBookTitle || "Buy book to support Gen Z free education";
+    bookTitle ||
+    backendBookTitle ||
+    "Buy book to support Gen Z free education";
 
-  const handleVideoCardPress = () => {
+  const handleVideoCardPress = async () => {
     if (onPlayPress) {
       onPlayPress();
     }
-    setVideoLoaded(false);
-    setIsFullScreen(true);
-  };
 
-  // Generate HTML for the in-app full-screen video player
-  const generateVideoHtml = (src: string, poster: string) => `
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-        <style>
-          * { margin: 0; padding: 0; box-sizing: border-box; background: #000000; }
-          html, body {
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            background: #000000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-          }
-          video {
-            width: 100%;
-            height: 100%;
-            max-height: 100vh;
-            object-fit: contain;
-            background: #000000;
-          }
-        </style>
-      </head>
-      <body>
-        <video
-          id="player"
-          src="${src}"
-          poster="${poster}"
-          controls
-          autoplay
-          playsinline
-          webkit-playsinline
-          controlsList="nodownload"
-        ></video>
-        <script>
-          const v = document.getElementById('player');
-          if (v) {
-            v.play().catch(function() {});
-          }
-        </script>
-      </body>
-    </html>
-  `;
+    if (Platform.OS === "web") {
+      setIsFullScreen(true);
+      return;
+    }
+
+    // Native player launch via system browser controller (zero unlinked native dependency)
+    try {
+      await WebBrowser.openBrowserAsync(effectiveVideoUrl, {
+        presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
+        toolbarColor: "#020B18",
+        controlsColor: "#00E5FF",
+        showTitle: true,
+      });
+    } catch {
+      Linking.openURL(effectiveVideoUrl).catch(() => {});
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -214,46 +175,52 @@ export default function PromoCards({
         </View>
       </TouchableOpacity>
 
-      {/* Full-Screen Video Player Modal */}
-      <Modal
-        visible={isFullScreen}
-        animationType="fade"
-        presentationStyle="fullScreen"
-        onRequestClose={() => setIsFullScreen(false)}
-        statusBarTranslucent
-      >
-        <View style={styles.fullScreenContainer}>
-          <StatusBar style="light" />
+      {/* Full-Screen Video Modal (for Web & Desktop previews) */}
+      {Platform.OS === "web" && (
+        <Modal
+          visible={isFullScreen}
+          animationType="fade"
+          presentationStyle="fullScreen"
+          onRequestClose={() => setIsFullScreen(false)}
+          statusBarTranslucent
+        >
+          <View style={styles.fullScreenContainer}>
+            <StatusBar style="light" />
 
-          {/* Modal Header Bar */}
-          <View
-            style={[
-              styles.modalHeader,
-              { paddingTop: Math.max(insets.top, 16) + 8 },
-            ]}
-          >
-            <View style={styles.modalTitleContainer}>
-              <Text style={styles.modalVideoTitle} numberOfLines={1}>
-                {effectiveTitle}
-              </Text>
-              <Text style={styles.modalVideoSubtitle} numberOfLines={1}>
-                Kalki Sena Drive • Jay Sah (MR. 666)
-              </Text>
+            {/* Modal Header Bar */}
+            <View
+              style={[
+                styles.modalHeader,
+                { paddingTop: Math.max(insets.top, 16) + 8 },
+              ]}
+            >
+              <View style={styles.modalTitleContainer}>
+                <View style={styles.liveBroadcastBadge}>
+                  <View style={styles.livePulseDot} />
+                  <Text style={styles.liveBroadcastText}>
+                    OFFICIAL BROADCAST
+                  </Text>
+                </View>
+                <Text style={styles.modalVideoTitle} numberOfLines={1}>
+                  {effectiveTitle}
+                </Text>
+                <Text style={styles.modalVideoSubtitle} numberOfLines={1}>
+                  Kalki Sena Drive • Jay Sah (MR. 666)
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.closeButton}
+                activeOpacity={0.8}
+                onPress={() => setIsFullScreen(false)}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Ionicons name="close" size={24} color="#FFFFFF" />
+              </TouchableOpacity>
             </View>
 
-            <TouchableOpacity
-              style={styles.closeButton}
-              activeOpacity={0.8}
-              onPress={() => setIsFullScreen(false)}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <Ionicons name="close" size={24} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
-
-          {/* Full Screen Video Display */}
-          <View style={styles.videoPlayerWrapper}>
-            {Platform.OS === "web" ? (
+            {/* Full Screen Video Display */}
+            <View style={styles.videoPlayerWrapper}>
               <video
                 src={effectiveVideoUrl}
                 controls
@@ -267,64 +234,35 @@ export default function PromoCards({
                   backgroundColor: "#000000",
                 }}
               />
-            ) : isFullScreen ? (
-              <View style={StyleSheet.absoluteFill}>
-                <WebView
-                  source={{
-                    html: generateVideoHtml(
-                      effectiveVideoUrl,
-                      effectiveThumbnail,
-                    ),
-                  }}
-                  style={styles.webViewPlayer}
-                  allowsInlineMediaPlayback={true}
-                  mediaPlaybackRequiresUserAction={false}
-                  javaScriptEnabled={true}
-                  domStorageEnabled={true}
-                  scrollEnabled={false}
-                  scalesPageToFit={true}
-                  onLoadEnd={() => setVideoLoaded(true)}
-                  originWhitelist={["*"]}
-                />
+            </View>
 
-                {!videoLoaded && (
-                  <View style={styles.videoLoadingOverlay}>
-                    <ActivityIndicator size="large" color="#00E5FF" />
-                    <Text style={styles.videoLoadingText}>
-                      Connecting to broadcast stream...
-                    </Text>
-                  </View>
-                )}
-              </View>
-            ) : null}
-          </View>
-
-          {/* Modal Bottom CTA Footer */}
-          <View
-            style={[
-              styles.modalFooter,
-              { paddingBottom: Math.max(insets.bottom, 16) + 10 },
-            ]}
-          >
-            <TouchableOpacity
-              style={styles.modalBuyBookButton}
-              activeOpacity={0.85}
-              onPress={() => {
-                setIsFullScreen(false);
-                if (onBuyBookPress) {
-                  onBuyBookPress();
-                }
-              }}
+            {/* Modal Bottom CTA Footer */}
+            <View
+              style={[
+                styles.modalFooter,
+                { paddingBottom: Math.max(insets.bottom, 16) + 10 },
+              ]}
             >
-              <Ionicons name="book" size={18} color="#FFFFFF" />
-              <Text style={styles.modalBuyBookButtonText}>
-                Buy Official Book & Support Free Education
-              </Text>
-              <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalBuyBookButton}
+                activeOpacity={0.85}
+                onPress={() => {
+                  setIsFullScreen(false);
+                  if (onBuyBookPress) {
+                    onBuyBookPress();
+                  }
+                }}
+              >
+                <Ionicons name="book" size={18} color="#FFFFFF" />
+                <Text style={styles.modalBuyBookButtonText}>
+                  Buy Official Book & Support Free Education
+                </Text>
+                <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
-      </Modal>
+        </Modal>
+      )}
     </View>
   );
 }
@@ -501,26 +439,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     position: "relative",
-  },
-  webViewPlayer: {
-    flex: 1,
-    backgroundColor: "#000000",
-  },
-  videoLoadingOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "#000000",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 10,
-  },
-  videoLoadingText: {
-    color: "#00E5FF",
-    fontSize: 12,
-    fontWeight: "600",
   },
   modalFooter: {
     paddingHorizontal: 16,
