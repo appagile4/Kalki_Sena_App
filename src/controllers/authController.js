@@ -45,8 +45,8 @@ const signup = async (req, res, next) => {
           const uploadRes = await uploadAvatarToCloudinary(cleanAvatar);
           avatarUrl = uploadRes.url;
         } catch (uploadErr) {
-          console.warn("[Cloudinary] Upload in signup warning:", uploadErr.message);
-          avatarUrl = "";
+          console.warn("[Cloudinary] Upload in signup fallback to direct storage:", uploadErr.message);
+          avatarUrl = cleanAvatar;
         }
       }
     }
@@ -480,8 +480,41 @@ const uploadAvatar = async (req, res, next) => {
       });
     }
 
-    // Upload image to Cloudinary
-    const uploadRes = await uploadAvatarToCloudinary(fileSource);
+    // Upload image to Cloudinary (with graceful fallback to MongoDB if key lacks create permissions)
+    let uploadRes = null;
+    let isCloudinarySuccess = false;
+
+    try {
+      uploadRes = await uploadAvatarToCloudinary(fileSource);
+      isCloudinarySuccess = true;
+    } catch (cldErr) {
+      console.warn(
+        `[Cloudinary] Upload failed (${cldErr.message}). Cloudinary Access Key 178442332451356 lacks 'create' (Upload) permissions in Cloudinary Console.`
+      );
+
+      // Graceful Fallback: store base64 directly in MongoDB so profile photo is updated without failing
+      let fallbackDataUri = null;
+      if (typeof fileSource === "string") {
+        fallbackDataUri = fileSource.startsWith("data:")
+          ? fileSource
+          : `data:image/jpeg;base64,${fileSource}`;
+      } else if (Buffer.isBuffer(fileSource)) {
+        fallbackDataUri = `data:image/jpeg;base64,${fileSource.toString("base64")}`;
+      }
+
+      if (fallbackDataUri) {
+        uploadRes = {
+          url: fallbackDataUri,
+          publicId: `mongo_fallback_${Date.now()}`,
+        };
+      } else {
+        return res.status(403).json({
+          success: false,
+          message:
+            "Cloudinary Access Key lacks 'create' (Upload) permissions. Please enable Write/Create permissions for key 178442332451356 in Cloudinary Console (Settings > Access Keys).",
+        });
+      }
+    }
 
     let updatedUser = null;
     // If authenticated via Bearer token, automatically update MongoDB user
@@ -504,7 +537,9 @@ const uploadAvatar = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: "Avatar uploaded to Cloudinary and saved to MongoDB successfully",
+      message: isCloudinarySuccess
+        ? "Avatar uploaded to Cloudinary and saved to MongoDB successfully"
+        : "Avatar saved to MongoDB successfully (Enable 'Create' permission in Cloudinary for CDN hosting)",
       avatarUrl: uploadRes.url,
       publicId: uploadRes.publicId,
       user: updatedUser,
@@ -571,7 +606,7 @@ const logout = async (req, res) => {
  */
 const googleLogin = async (req, res, next) => {
   try {
-    const { idToken } = req.body;
+    const { idToken, dob, gender } = req.body;
 
     if (!idToken) {
       return res.status(400).json({
@@ -585,7 +620,9 @@ const googleLogin = async (req, res, next) => {
     try {
       const allowedAudiences = [
         process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_WEB_CLIENT_ID,
         process.env.GOOGLE_IOS_CLIENT_ID,
+        "284669757325-8i1iivlfkge4s3itcmu4b27qr5iu9b10.apps.googleusercontent.com",
         "284669757325-c1vm3h23si9e9hk7ued21o3020tbtt8p.apps.googleusercontent.com",
         "284669757325-vr2oqodqkpk2tpb0u46nvb09plbriuq5.apps.googleusercontent.com",
       ].filter(Boolean);
@@ -650,6 +687,14 @@ const googleLogin = async (req, res, next) => {
         user.fullName = name;
         modified = true;
       }
+      if (!user.dob && dob) {
+        user.dob = dob;
+        modified = true;
+      }
+      if ((!user.gender || user.gender === "Male") && gender) {
+        user.gender = gender;
+        modified = true;
+      }
       if (modified) {
         await user.save();
       }
@@ -671,6 +716,12 @@ const googleLogin = async (req, res, next) => {
         if (!user.avatar && picture) {
           user.avatar = picture;
         }
+        if (!user.dob && dob) {
+          user.dob = dob;
+        }
+        if ((!user.gender || user.gender === "Male") && gender) {
+          user.gender = gender;
+        }
         await user.save();
       } else {
         // 3. New User Registration via Google
@@ -680,8 +731,11 @@ const googleLogin = async (req, res, next) => {
           googleId,
           authProvider: "google",
           avatar: picture || "",
+          dob: dob || "",
+          gender: gender || "Male",
           role: "user",
           isVerified: true,
+          hasPassword: false,
         });
       }
     }

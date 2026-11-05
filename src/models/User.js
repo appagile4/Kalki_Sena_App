@@ -81,6 +81,10 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    hasPassword: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,
@@ -89,6 +93,9 @@ const userSchema = new mongoose.Schema(
 
 // Encrypt password using bcryptjs before saving
 userSchema.pre("save", async function () {
+  if (this.password) {
+    this.hasPassword = true;
+  }
   if (!this.password || !this.isModified("password")) {
     return;
   }
