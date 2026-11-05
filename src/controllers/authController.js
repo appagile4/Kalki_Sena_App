@@ -759,10 +759,65 @@ const googleLogin = async (req, res, next) => {
   }
 };
 
+/**
+ * @desc    Set password (for Google OAuth users or users without password) & optionally update DOB/Gender
+ * @route   POST /api/auth/set-password
+ * @access  Private (JWT protected)
+ */
+const setPassword = async (req, res, next) => {
+  try {
+    const { password, dob, gender } = req.body;
+
+    if (!password || typeof password !== "string" || password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: "Password is required and must be at least 6 characters long",
+      });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // Assign new password (pre-save hook will hash it and set hasPassword = true)
+    user.password = password;
+    user.hasPassword = true;
+
+    if (dob && typeof dob === "string" && dob.trim()) {
+      user.dob = dob.trim();
+    }
+
+    if (gender && ["Male", "Female", "Other"].includes(gender)) {
+      user.gender = gender;
+    }
+
+    await user.save();
+
+    // Fetch sanitized user object without password
+    const updatedUser = await User.findById(req.user._id);
+
+    res.status(200).json({
+      success: true,
+      message: "Password and profile updated successfully",
+      user: updatedUser,
+      data: {
+        user: updatedUser,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   signup,
   login,
   googleLogin,
+  setPassword,
   sendOtp,
   resendOtp,
   verifyOtp,

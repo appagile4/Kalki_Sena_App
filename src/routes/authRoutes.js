@@ -4,6 +4,7 @@ const {
   signup,
   login,
   googleLogin,
+  setPassword,
   sendOtp,
   resendOtp,
   verifyOtp,
@@ -83,6 +84,7 @@ const otpLimiter = rateLimit({
 router.post("/signup", authLimiter, validateSignup, signup);
 router.post("/login", authLimiter, validateLogin, login);
 router.post("/google", authLimiter, googleLogin);
+router.post("/set-password", protect, setPassword);
 router.post("/logout", optionalProtect, logout);
 router.get("/me", protect, getMe);
 
