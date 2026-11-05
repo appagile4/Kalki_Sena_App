@@ -5,6 +5,8 @@ const hpp = require("hpp");
 const mongoSanitize = require("express-mongo-sanitize");
 const rateLimit = require("express-rate-limit");
 const authRoutes = require("./routes/authRoutes");
+const bookRoutes = require("./routes/bookRoutes");
+const videoRoutes = require("./routes/videoRoutes");
 const { notFound, errorHandler } = require("./middleware/errorHandler");
 
 const app = express();
@@ -21,12 +23,19 @@ app.use(
   })
 );
 
-// 3. Rate Limiting for API routes
+// 3. Rate Limiting for API routes (Authentication/Login endpoints are exempt)
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
+  max: 1000, // Generous limit for general API routes
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => {
+    // Completely exempt authentication endpoints (login, signup, oauth) from rate limiting
+    return (
+      req.originalUrl.includes("/api/auth") ||
+      req.path.startsWith("/auth")
+    );
+  },
   message: {
     success: false,
     message: "Too many requests from this IP, please try again after 15 minutes.",
@@ -68,6 +77,8 @@ app.get("/api/health", (req, res) => {
 
 // 7. Mount feature routes
 app.use("/api/auth", authRoutes);
+app.use("/api/books", bookRoutes);
+app.use("/api/videos", videoRoutes);
 
 // 8. 404 & Central Error Handling
 app.use(notFound);

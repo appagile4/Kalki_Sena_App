@@ -80,10 +80,10 @@ const otpLimiter = rateLimit({
   },
 });
 
-// Core Authentication
-router.post("/signup", authLimiter, validateSignup, signup);
-router.post("/login", authLimiter, validateLogin, login);
-router.post("/google", authLimiter, googleLogin);
+// Core Authentication (Rate limiting removed for login/signup)
+router.post("/signup", validateSignup, signup);
+router.post("/login", validateLogin, login);
+router.post("/google", googleLogin);
 router.post("/set-password", protect, setPassword);
 router.post("/logout", optionalProtect, logout);
 router.get("/me", protect, getMe);
@@ -91,9 +91,9 @@ router.get("/me", protect, getMe);
 // OTP & Password Reset
 router.post("/send-otp", otpLimiter, sendOtp);
 router.post("/resend-otp", otpLimiter, resendOtp);
-router.post("/verify-otp", authLimiter, verifyOtp);
+router.post("/verify-otp", verifyOtp);
 router.post("/forgot-password", otpLimiter, forgotPassword);
-router.post("/reset-password", authLimiter, resetPassword);
+router.post("/reset-password", resetPassword);
 
 // Profile & Avatar (Cloudinary & MongoDB)
 router.post("/upload-avatar", optionalProtect, handleAvatarFile, uploadAvatar);
