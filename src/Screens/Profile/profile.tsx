@@ -1,34 +1,29 @@
-import React, { useState, useEffect } from "react";
-import {
-  StyleSheet,
-  Text,
-  View,
-  TouchableOpacity,
-  TextInput,
-  ScrollView,
-  Modal,
-  Switch,
-  Alert,
-  Dimensions,
-  ActivityIndicator,
-} from "react-native";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
-import { StatusBar } from "expo-status-bar";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import { useEffect, useState } from "react";
 import {
-  Ionicons,
-  MaterialIcons,
-  MaterialCommunityIcons,
-  FontAwesome5,
-} from "@expo/vector-icons";
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
 import {
-  uploadAvatarThunk,
-  updateProfileThunk,
   logoutUser,
+  updateProfileThunk,
+  uploadAvatarThunk,
 } from "../../redux/slices/authSlice";
 
 // Current Active Sub-View
@@ -100,7 +95,7 @@ export default function ProfileScreen() {
       if (permission.status !== "granted") {
         Alert.alert(
           "Permission Required",
-          `Please grant ${useCamera ? "camera" : "gallery"} permissions to update your profile photo.`
+          `Please grant ${useCamera ? "camera" : "gallery"} permissions to update your profile photo.`,
         );
         return;
       }
@@ -109,14 +104,14 @@ export default function ProfileScreen() {
         ? await ImagePicker.launchCameraAsync({
             allowsEditing: true,
             aspect: [1, 1],
-            quality: 0.8,
+            quality: 0.5,
             base64: true,
           })
         : await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ["images"],
             allowsEditing: true,
             aspect: [1, 1],
-            quality: 0.8,
+            quality: 0.5,
             base64: true,
           });
 
@@ -132,19 +127,20 @@ export default function ProfileScreen() {
             uploadAvatarThunk({
               imageSource: base64Data,
               token,
-            })
+            }),
           ).unwrap();
 
           Alert.alert(
             "Success",
-            "Profile photo uploaded to Cloudinary and saved to MongoDB successfully!"
+            "Profile photo updated successfully!",
           );
         } catch (uploadErr: any) {
+          console.log("Upload error:", uploadErr);
           Alert.alert(
             "Upload Result",
             typeof uploadErr === "string"
               ? uploadErr
-              : "Could not upload avatar to Cloudinary."
+              : "Could not upload avatar to Cloudinary.",
           );
         } finally {
           setIsUploadingAvatar(false);
@@ -169,7 +165,7 @@ export default function ProfileScreen() {
   const [editCountryCode, setEditCountryCode] = useState("+977");
   const [editEmail, setEditEmail] = useState(profileData.email);
   const [editGender, setEditGender] = useState<"Male" | "Female" | "Other">(
-    "Male"
+    "Male",
   );
   const [editDob, setEditDob] = useState(profileData.dob);
 
@@ -179,7 +175,7 @@ export default function ProfileScreen() {
   const [longDistance, setLongDistance] = useState(false);
   const [excludeLowRated, setExcludeLowRated] = useState(false);
   const [preferredNav, setPreferredNav] = useState<"Google Maps" | "Maps">(
-    "Google Maps"
+    "Google Maps",
   );
 
   // Notifications & Promotions State
@@ -194,9 +190,9 @@ export default function ProfileScreen() {
   const [selectedVehicle, setSelectedVehicle] = useState("Hyundai");
 
   // Language state
-  const [selectedLanguage, setSelectedLanguage] = useState<"English" | "नेपाली">(
-    "English"
-  );
+  const [selectedLanguage, setSelectedLanguage] = useState<
+    "English" | "नेपाली"
+  >("English");
 
   // Password change form
   const [oldPassword, setOldPassword] = useState("");
@@ -246,14 +242,14 @@ export default function ProfileScreen() {
               dob: editDob,
             },
             token,
-          })
+          }),
         ).unwrap();
       } catch (err) {
         console.warn("Could not sync profile to MongoDB:", err);
       }
     }
 
-    Alert.alert("Profile Updated", "Your profile details have been saved to MongoDB.");
+    Alert.alert("Profile Updated", "Your Updated Successfully.");
     setCurrentView("view_profile");
   };
 
@@ -265,21 +261,25 @@ export default function ProfileScreen() {
 
   // Logout handler
   const handleLogout = () => {
-    Alert.alert("Log Out", "Are you sure you want to log out of your account?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Log Out",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await dispatch(logoutUser()).unwrap();
-          } catch {
-            // Handled
-          }
-          router.replace("/Auth/login" as any);
+    Alert.alert(
+      "Log Out",
+      "Are you sure you want to log out of your account?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Log Out",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await dispatch(logoutUser()).unwrap();
+            } catch {
+              // Handled
+            }
+            router.replace("/Auth/login" as any);
+          },
         },
-      },
-    ]);
+      ],
+    );
   };
 
   return (
@@ -417,7 +417,11 @@ export default function ProfileScreen() {
                 onPress={() => setCurrentView("ride_activity")}
               >
                 <View style={styles.menuLeft}>
-                  <Ionicons name="car-sport-outline" size={20} color="#CADDF7" />
+                  <Ionicons
+                    name="car-sport-outline"
+                    size={20}
+                    color="#CADDF7"
+                  />
                   <Text style={styles.menuLabel}>Ride activity</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color="#7A8D9E" />
@@ -469,7 +473,7 @@ export default function ProfileScreen() {
                 onPress={() =>
                   Alert.alert(
                     "Privacy Policy",
-                    "Kalki Sena Drive is committed to safeguarding your personal data, privacy, and trip security according to Nepal data protection regulations."
+                    "Kalki Sena Drive is committed to safeguarding your personal data, privacy, and trip security according to Nepal data protection regulations.",
                   )
                 }
               >
@@ -673,7 +677,12 @@ export default function ProfileScreen() {
             <View style={styles.editAvatarWrapper}>
               <View style={styles.avatarBorderLarge}>
                 {isUploadingAvatar ? (
-                  <View style={[styles.editAvatar, { justifyContent: "center", alignItems: "center" }]}>
+                  <View
+                    style={[
+                      styles.editAvatar,
+                      { justifyContent: "center", alignItems: "center" },
+                    ]}
+                  >
                     <ActivityIndicator size="small" color="#2079F2" />
                   </View>
                 ) : (
@@ -714,7 +723,7 @@ export default function ProfileScreen() {
                 onPress={() =>
                   Alert.alert(
                     "Country Code",
-                    "Select code:\n+977 (Nepal)\n+91 (India)"
+                    "Select code:\n+977 (Nepal)\n+91 (India)",
                   )
                 }
               >
@@ -758,9 +767,7 @@ export default function ProfileScreen() {
                 >
                   <Ionicons
                     name={
-                      editGender === g
-                        ? "radio-button-on"
-                        : "radio-button-off"
+                      editGender === g ? "radio-button-on" : "radio-button-off"
                     }
                     size={20}
                     color={editGender === g ? "#1E78E5" : "#64748B"}
@@ -855,7 +862,7 @@ export default function ProfileScreen() {
               onPress={() =>
                 Alert.alert(
                   "Driving Licence",
-                  "Status: Submitted, currently under review by our safety team."
+                  "Status: Submitted, currently under review by our safety team.",
                 )
               }
             >
@@ -872,9 +879,7 @@ export default function ProfileScreen() {
             </TouchableOpacity>
 
             {/* Vehicle Header */}
-            <Text style={styles.vehicleDocHeader}>
-              Honda City - 7AB5630TT
-            </Text>
+            <Text style={styles.vehicleDocHeader}>Honda City - 7AB5630TT</Text>
 
             {/* Vehicle registration certificate */}
             <TouchableOpacity
@@ -883,7 +888,7 @@ export default function ProfileScreen() {
               onPress={() =>
                 Alert.alert(
                   "Vehicle Registration (RC)",
-                  "Please re-upload a clear copy of your vehicle RC."
+                  "Please re-upload a clear copy of your vehicle RC.",
                 )
               }
             >
@@ -909,14 +914,16 @@ export default function ProfileScreen() {
               onPress={() =>
                 Alert.alert(
                   "Vehicle Insurance",
-                  "Please update your policy document."
+                  "Please update your policy document.",
                 )
               }
             >
               <View style={styles.documentItemLeft}>
                 <Ionicons name="warning" size={20} color="#F59E0B" />
                 <View style={styles.documentTextCol}>
-                  <Text style={styles.documentItemTitle}>Vehicle insurance</Text>
+                  <Text style={styles.documentItemTitle}>
+                    Vehicle insurance
+                  </Text>
                   <Text style={styles.documentItemSubtext}>
                     Update your vehicle insurance
                   </Text>
@@ -930,10 +937,7 @@ export default function ProfileScreen() {
               style={styles.documentItemCard}
               activeOpacity={0.8}
               onPress={() =>
-                Alert.alert(
-                  "Vehicle Number",
-                  "Status: Submitted, under review"
-                )
+                Alert.alert("Vehicle Number", "Status: Submitted, under review")
               }
             >
               <View style={styles.documentItemLeft}>
@@ -1269,7 +1273,7 @@ export default function ProfileScreen() {
                         { text: "Edit" },
                         { text: "Delete", style: "destructive" },
                         { text: "Cancel", style: "cancel" },
-                      ]
+                      ],
                     )
                   }
                 >
@@ -1530,7 +1534,7 @@ export default function ProfileScreen() {
                   setShowEmergencyModal(false);
                   Alert.alert(
                     "Emergency Call",
-                    "Connecting to Nepal Police Emergency Helpline 100..."
+                    "Connecting to Nepal Police Emergency Helpline 100...",
                   );
                 }}
               >
@@ -1569,7 +1573,11 @@ export default function ProfileScreen() {
                 setShowDeleteConfirmModal(true);
               }}
             >
-              <Ionicons name="person-remove-outline" size={20} color="#EF4444" />
+              <Ionicons
+                name="person-remove-outline"
+                size={20}
+                color="#EF4444"
+              />
               <Text style={styles.deleteAccountItemText}>Delete Account</Text>
             </TouchableOpacity>
           </View>
@@ -1620,7 +1628,7 @@ export default function ProfileScreen() {
                         text: "OK",
                         onPress: () => router.replace("/Auth/login" as any),
                       },
-                    ]
+                    ],
                   );
                 }}
               >
@@ -1698,7 +1706,7 @@ export default function ProfileScreen() {
                 setConfirmPassword("");
                 Alert.alert(
                   "Password Changed",
-                  "Your password was updated successfully."
+                  "Your password was updated successfully.",
                 );
               }}
             >

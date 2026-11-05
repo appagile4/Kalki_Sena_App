@@ -14,6 +14,7 @@ import CategoryGrid from "../../components/Home/CategoryGrid";
 import PromoCards from "../../components/Home/PromoCards";
 import ServiceList from "../../components/Home/ServiceList";
 import SocialLinks from "../../components/Home/SocialLinks";
+import LoginPromptCard from "../../components/Home/LoginPromptCard";
 import {
   QuickActionItem,
   CommunityProgramItem,
@@ -24,18 +25,44 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const { user } = useAppSelector((state) => state.auth);
+  const { user, isAuthenticated } = useAppSelector((state) => state.auth);
 
   // Handlers for interactions
   const handleProfilePress = () => {
+    if (!isAuthenticated) {
+      Alert.alert(
+        "Sign In Required",
+        "Please log in or create an account to view and manage your profile.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Log In", onPress: () => router.push("/Auth/login") },
+        ]
+      );
+      return;
+    }
     router.push("/Home/profile" as any);
   };
 
   const handleNotificationPress = () => {
+    if (!isAuthenticated) {
+      Alert.alert(
+        "Sign In Required",
+        "Please log in to receive ride and account notifications.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Log In", onPress: () => router.push("/Auth/login") },
+        ]
+      );
+      return;
+    }
     router.push("/Home/notifications" as any);
   };
 
   const handleLogoutPress = () => {
+    if (!isAuthenticated) {
+      router.push("/Auth/login");
+      return;
+    }
     Alert.alert("Log Out", "Are you sure you want to log out?", [
       { text: "Cancel", style: "cancel" },
       {
@@ -194,7 +221,7 @@ export default function HomeScreen() {
       >
         {/* 1. Header (User profile, Greeting, Notifications & Logout) */}
         <HomeHeader
-          userName={user?.fullName || "Subhodip"}
+          userName={user?.fullName || (isAuthenticated ? "Subhodip" : "Guest")}
           greeting="Namaste"
           avatarUri={user?.avatar || undefined}
           onProfilePress={handleProfilePress}
@@ -226,6 +253,14 @@ export default function HomeScreen() {
 
         {/* 5. Our Services List */}
         <ServiceList onServicePress={handleServicePress} />
+
+        {/* Guest Login Card (Placed between ServiceList and SocialLinks) */}
+        {!isAuthenticated && (
+          <LoginPromptCard
+            onLoginPress={() => router.push("/Auth/login")}
+            onSignupPress={() => router.push("/Auth/signup")}
+          />
+        )}
 
         {/* 6. Social Media & SOS Channels */}
         <SocialLinks

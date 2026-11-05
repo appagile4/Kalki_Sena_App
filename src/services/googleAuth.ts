@@ -4,7 +4,7 @@ import type { SignInResponse } from "@react-native-google-signin/google-signin";
 // Google OAuth Client IDs
 export const GOOGLE_WEB_CLIENT_ID =
   process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ||
-  "284669757325-c1vm3h23si9e9hk7ued21o3020tbtt8p.apps.googleusercontent.com";
+  "284669757325-8i1iivlfkge4s3itcmu4b27qr5iu9b10.apps.googleusercontent.com";
 
 export const GOOGLE_IOS_CLIENT_ID =
   process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ||
@@ -172,6 +172,20 @@ export const googleAuthService = {
         return {
           success: false,
           error: "Google Play Services is not available or needs to be updated.",
+        };
+      }
+
+      if (
+        error.code === 10 ||
+        error.code === "10" ||
+        error.message?.includes("DEVELOPER_ERROR")
+      ) {
+        return {
+          success: false,
+          error:
+            "DEVELOPER_ERROR (code 10):\n" +
+            "1. SHA-1 Mismatch: In Google Cloud Console (Credentials > Android Client), add your local debug SHA-1: 1F:9F:49:4B:95:38:DD:6A:EA:F7:A4:B9:CF:16:AA:E6:89:93:37:C9 for package com.agileapp977.Kalki_Sena_Drive.\n" +
+            "2. Web Client ID: Make sure webClientId is an OAuth client of type 'Web application' (not Android client).",
         };
       }
 

@@ -15,16 +15,16 @@ function RootNavigationLayout() {
     if (!isInitialized) return;
 
     const rootSegment = segments[0];
+    const subSegment = segments[1];
     const inAuthGroup = rootSegment === "Auth";
     const inOnboardingGroup = rootSegment === "Onboarding";
-    const inHomeGroup = rootSegment === "Home";
 
-    if (!isAuthenticated && inHomeGroup) {
-      // User is logged out but inside protected Home route -> redirect to login
-      router.replace("/Auth/login");
-    } else if (isAuthenticated && (inAuthGroup || inOnboardingGroup)) {
+    if (isAuthenticated && (inAuthGroup || inOnboardingGroup)) {
       // User is authenticated but navigating to login, signup, or onboarding -> redirect to Home
       router.replace("/Home");
+    } else if (!isAuthenticated && rootSegment === "Home" && subSegment === "profile") {
+      // Profile screen requires authentication
+      router.replace("/Auth/login");
     }
   }, [isInitialized, isAuthenticated, segments, router]);
 

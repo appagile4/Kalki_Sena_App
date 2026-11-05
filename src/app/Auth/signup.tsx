@@ -1,15 +1,11 @@
-import CountryCodeModal, {
-  CountryItem,
-} from "../../components/Main/countrycodeModal";
-import DateTimePicker, {
-  DateTimePickerChangeEvent,
-} from "@react-native-community/datetimepicker";
+import { Ionicons } from "@expo/vector-icons";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useState, useMemo, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -23,12 +19,18 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
 import RadioGroup, { RadioButtonProps } from "react-native-radio-buttons-group";
-import { useAppDispatch, useAppSelector } from "../../redux/hooks";
-import { registerUser, clearError, sendOtpThunk } from "../../redux/slices/authSlice";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import GoogleSignInButton from "../../components/Auth/GoogleSignInButton";
+import CountryCodeModal, {
+  CountryItem,
+} from "../../components/Main/countrycodeModal";
+import { useAppDispatch, useAppSelector } from "../../redux/hooks";
+import {
+  clearError,
+  registerUser,
+  sendOtpThunk,
+} from "../../redux/slices/authSlice";
 
 export default function SignupScreen() {
   const router = useRouter();
@@ -45,7 +47,9 @@ export default function SignupScreen() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date(2000, 0, 1));
   const [showDatePicker, setShowDatePicker] = useState(false);
 
-  const [selectedGenderId, setSelectedGenderId] = useState<string | undefined>("1");
+  const [selectedGenderId, setSelectedGenderId] = useState<string | undefined>(
+    "1",
+  );
   const radioButtons: RadioButtonProps[] = useMemo(
     () => [
       {
@@ -78,7 +82,7 @@ export default function SignupScreen() {
         labelStyle: { color: "#FFFFFF", fontSize: 13.5 },
       },
     ],
-    []
+    [],
   );
 
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -102,7 +106,9 @@ export default function SignupScreen() {
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
-  const [confirmPasswordError, setConfirmPasswordError] = useState<string | null>(null);
+  const [confirmPasswordError, setConfirmPasswordError] = useState<
+    string | null
+  >(null);
   const [termsError, setTermsError] = useState<string | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
 
@@ -111,6 +117,7 @@ export default function SignupScreen() {
     if (error) {
       setServerError(error);
     }
+    console.log("Error:", error);
   }, [error]);
 
   // Form Validation
@@ -202,7 +209,7 @@ export default function SignupScreen() {
       if (status !== "granted") {
         Alert.alert(
           "Permission Required",
-          "Sorry, we need camera roll permissions to upload your profile picture."
+          "Sorry, we need camera roll permissions to upload your profile picture.",
         );
         return;
       }
@@ -232,7 +239,7 @@ export default function SignupScreen() {
       if (status !== "granted") {
         Alert.alert(
           "Permission Required",
-          "Sorry, we need camera permissions to take a profile picture."
+          "Sorry, we need camera permissions to take a profile picture.",
         );
         return;
       }
@@ -264,10 +271,7 @@ export default function SignupScreen() {
   };
 
   // --- Date Picker Handlers (backward compatible with onValueChange & onChange) ---
-  const handleDateValueChange = (
-    _event: any,
-    date?: Date
-  ) => {
+  const handleDateValueChange = (_event: any, date?: Date) => {
     if (Platform.OS === "android") {
       setShowDatePicker(false);
     }
@@ -310,7 +314,7 @@ export default function SignupScreen() {
           gender,
           password,
           avatar: avatarUri || "",
-        })
+        }),
       ).unwrap();
 
       if (result.success) {
@@ -321,7 +325,7 @@ export default function SignupScreen() {
               email: email.trim(),
               name: fullName.trim(),
               type: "signup",
-            })
+            }),
           ).unwrap();
         } catch (otpErr) {
           console.warn("Could not pre-send OTP:", otpErr);
@@ -344,7 +348,7 @@ export default function SignupScreen() {
       setServerError(
         typeof err === "string"
           ? err
-          : "Failed to create account. Please try again."
+          : "Failed to create account. Please try again.",
       );
     }
   };
@@ -465,11 +469,7 @@ export default function SignupScreen() {
                   pointerEvents="none"
                 />
                 <View style={styles.rightIconWrapper}>
-                  <Ionicons
-                    name="calendar-outline"
-                    size={18}
-                    color="#5A7394"
-                  />
+                  <Ionicons name="calendar-outline" size={18} color="#5A7394" />
                 </View>
               </TouchableOpacity>
               {dobError && (
@@ -506,15 +506,17 @@ export default function SignupScreen() {
                       >
                         <Text style={styles.iosModalCancel}>Cancel</Text>
                       </TouchableOpacity>
-                      <Text style={styles.iosModalTitle}>Select Birth Date</Text>
+                      <Text style={styles.iosModalTitle}>
+                        Select Birth Date
+                      </Text>
                       <TouchableOpacity
                         onPress={() => {
                           const day = String(selectedDate.getDate()).padStart(
                             2,
-                            "0"
+                            "0",
                           );
                           const month = String(
-                            selectedDate.getMonth() + 1
+                            selectedDate.getMonth() + 1,
                           ).padStart(2, "0");
                           const year = selectedDate.getFullYear();
                           setDob(`${day}/${month}/${year}`);
@@ -692,7 +694,9 @@ export default function SignupScreen() {
                 </TouchableOpacity>
               </View>
               {confirmPasswordError && (
-                <Text style={styles.fieldErrorText}>{confirmPasswordError}</Text>
+                <Text style={styles.fieldErrorText}>
+                  {confirmPasswordError}
+                </Text>
               )}
             </View>
 
@@ -722,7 +726,12 @@ export default function SignupScreen() {
                 </Text>
               </TouchableOpacity>
               {termsError && (
-                <Text style={[styles.fieldErrorText, { marginLeft: 26, marginTop: 2 }]}>
+                <Text
+                  style={[
+                    styles.fieldErrorText,
+                    { marginLeft: 26, marginTop: 2 },
+                  ]}
+                >
                   {termsError}
                 </Text>
               )}
