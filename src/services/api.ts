@@ -86,6 +86,30 @@ export const getAuthHeaders = async (
 };
 
 export const apiService = {
+  // Google Sign-In Request
+  googleLogin: async (idToken: string): Promise<ApiResponse> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/google`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({ idToken }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to authenticate with Google");
+      }
+      return data;
+    } catch (error: any) {
+      throw new Error(
+        error.message || "Google authentication request failed. Check server."
+      );
+    }
+  },
+
   // Login Request
   login: async (payload: LoginPayload): Promise<ApiResponse> => {
     try {

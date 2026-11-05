@@ -18,6 +18,7 @@ import { Ionicons } from "@expo/vector-icons";
 import Svg, { Path } from "react-native-svg";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
 import { loginUser, clearError } from "../../redux/slices/authSlice";
+import GoogleSignInButton from "../../components/Auth/GoogleSignInButton";
 
 // --- Gmail Vector Icon ---
 const GmailIcon = ({ size = 18 }: { size?: number }) => {
@@ -139,17 +140,6 @@ export default function LoginScreen() {
 
   const handleForgotPassword = () => {
     router.push("/Auth/forgotpassword");
-  };
-
-  const handleGmailSignIn = () => {
-    router.push({
-      pathname: "/Auth/verify",
-      params: {
-        mode: "login",
-        name: "Subhodip",
-        email: "subhodip@gmail.com",
-      },
-    });
   };
 
   return (
@@ -295,17 +285,13 @@ export default function LoginScreen() {
             <View style={styles.dividerLine} />
           </View>
 
-          {/* Sign up with Gmail Button */}
-          <TouchableOpacity
-            style={styles.gmailButton}
-            activeOpacity={0.8}
-            onPress={handleGmailSignIn}
-          >
-            <View style={styles.gmailIconWrapper}>
-              <GmailIcon size={18} />
-            </View>
-            <Text style={styles.gmailButtonText}>Sign up with Gmail</Text>
-          </TouchableOpacity>
+          {/* Continue with Google Button */}
+          <GoogleSignInButton
+            title="Continue with Google"
+            onError={(err) => setErrorMessage(err)}
+            onSuccess={() => router.replace("/Home" as any)}
+            style={{ marginBottom: 20 }}
+          />
 
           {/* Bottom Link: Don't have an account? Sign Up */}
           <View style={styles.footerRow}>

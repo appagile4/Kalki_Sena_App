@@ -28,6 +28,7 @@ import { Ionicons } from "@expo/vector-icons";
 import RadioGroup, { RadioButtonProps } from "react-native-radio-buttons-group";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
 import { registerUser, clearError, sendOtpThunk } from "../../redux/slices/authSlice";
+import GoogleSignInButton from "../../components/Auth/GoogleSignInButton";
 
 export default function SignupScreen() {
   const router = useRouter();
@@ -741,6 +742,21 @@ export default function SignupScreen() {
               )}
             </TouchableOpacity>
 
+            {/* Divider */}
+            <View style={styles.dividerRow}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>or</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            {/* Continue with Google */}
+            <GoogleSignInButton
+              title="Continue with Google"
+              onError={(err) => setServerError(err)}
+              onSuccess={() => router.replace("/Home" as any)}
+              style={{ marginBottom: 20 }}
+            />
+
             {/* Footer: Already have an account? Login */}
             <View style={styles.footerRow}>
               <Text style={styles.footerText}>Already have an account? </Text>
@@ -1045,5 +1061,22 @@ const styles = StyleSheet.create({
     color: "#2079F2",
     fontSize: 15,
     fontWeight: "700",
+  },
+  dividerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 20,
+    marginBottom: 20,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "#1E293B",
+  },
+  dividerText: {
+    color: "#7A8D9E",
+    fontSize: 14,
+    fontWeight: "500",
+    paddingHorizontal: 12,
   },
 });

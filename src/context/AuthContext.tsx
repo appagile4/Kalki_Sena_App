@@ -3,6 +3,7 @@ import { useAppDispatch, useAppSelector } from "../redux/hooks";
 import {
   initializeAuth as initAuthThunk,
   loginUser,
+  googleLoginThunk,
   registerUser,
   logoutUser as logoutThunk,
   User,
@@ -16,6 +17,7 @@ export interface AuthContextType {
   isLoading: boolean;
   isInitialized: boolean;
   login: (payload: LoginPayload) => Promise<ApiResponse>;
+  loginWithGoogle: () => Promise<ApiResponse>;
   signup: (payload: SignupPayload) => Promise<ApiResponse>;
   logout: () => Promise<void>;
   initializeAuth: () => Promise<void>;
@@ -48,6 +50,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     return await dispatch(loginUser(payload)).unwrap();
   };
 
+  const loginWithGoogle = async (): Promise<ApiResponse> => {
+    return await dispatch(googleLoginThunk()).unwrap();
+  };
+
   const signup = async (payload: SignupPayload): Promise<ApiResponse> => {
     return await dispatch(registerUser(payload)).unwrap();
   };
@@ -67,6 +73,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     isLoading,
     isInitialized,
     login,
+    loginWithGoogle,
     signup,
     logout,
     initializeAuth,

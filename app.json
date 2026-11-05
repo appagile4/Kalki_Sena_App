@@ -8,6 +8,8 @@
     "scheme": "kalkisenadrive",
     "userInterfaceStyle": "automatic",
     "ios": {
+      "bundleIdentifier": "com.agileapp977.kalkisenadrive",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "icon": "./assets/expo.icon"
     },
     "android": {
@@ -44,7 +46,13 @@
           "photosPermission": "The app accesses your photos to let you set your profile picture."
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.284669757325-vr2oqodqkpk2tpb0u46nvb09plbriuq5"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

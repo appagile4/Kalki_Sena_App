@@ -9,6 +9,7 @@ import {
   ResetPasswordPayload,
 } from "../../services/api";
 import { secureStorage } from "../../services/secureStorage";
+import { googleAuthService } from "../../services/googleAuth";
 
 export interface User {
   _id: string;
@@ -19,6 +20,8 @@ export interface User {
   gender?: string;
   avatar?: string;
   role?: string;
+  googleId?: string;
+  authProvider?: string;
   isVerified?: boolean;
   createdAt?: string;
 }
@@ -135,6 +138,44 @@ export const loginUser = createAsyncThunk(
       return response;
     } catch (error: any) {
       return rejectWithValue(error.message || "Login failed");
+    }
+  }
+);
+
+// Async Thunk: Google Login
+export const googleLoginThunk = createAsyncThunk(
+  "auth/googleLogin",
+  async (_, { rejectWithValue }) => {
+    try {
+      const googleResult = await googleAuthService.signIn();
+
+      if (googleResult.cancelled) {
+        return rejectWithValue({
+          cancelled: true,
+          message: "Sign in cancelled",
+        });
+      }
+
+      if (!googleResult.success || !googleResult.idToken) {
+        return rejectWithValue({
+          cancelled: false,
+          message: googleResult.error || "Google Sign-In failed",
+        });
+      }
+
+      const response = await apiService.googleLogin(googleResult.idToken);
+      if (response.token) {
+        await secureStorage.saveAccessToken(response.token);
+      }
+      if (response.user) {
+        await secureStorage.saveUser(response.user);
+      }
+      return response;
+    } catch (error: any) {
+      return rejectWithValue({
+        cancelled: false,
+        message: error.message || "Google authentication failed",
+      });
     }
   }
 );
@@ -309,6 +350,11 @@ export const logoutUser = createAsyncThunk(
     } catch {
       // Ignore network errors during logout
     }
+    try {
+      await googleAuthService.signOut();
+    } catch {
+      // Ignore Google SDK logout error
+    }
     await secureStorage.clearAuthStorage();
     return true;
   }
@@ -415,6 +461,33 @@ export const authSlice = createSlice({
         state.isLoading = false;
         state.isAuthenticated = false;
         state.error = (action.payload as string) || "Login failed";
+      });
+
+    // --- Google Login ---
+    builder
+      .addCase(googleLoginThunk.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(googleLoginThunk.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.isAuthenticated = true;
+        state.token = action.payload.token || null;
+        state.user = action.payload.user || null;
+        state.successMessage =
+          action.payload.message || "Google login successful";
+        state.error = null;
+      })
+      .addCase(googleLoginThunk.rejected, (state, action: any) => {
+        state.isLoading = false;
+        const payload = action.payload;
+        if (payload?.cancelled) {
+          state.error = null; // Do not display error on user cancel
+        } else {
+          state.error =
+            (typeof payload === "string" ? payload : payload?.message) ||
+            "Google login failed";
+        }
       });
 
     // --- Register ---
