@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   StyleSheet,
   Text,
@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
-  Alert,
+  ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -15,14 +15,26 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import RadioGroup, { RadioButtonProps } from "react-native-radio-buttons-group";
+import { useAppDispatch, useAppSelector } from "../../redux/hooks";
+import { forgotPasswordThunk, clearError } from "../../redux/slices/authSlice";
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const dispatch = useAppDispatch();
+  const { otpLoading, otpError } = useAppSelector((state) => state.auth);
 
   // Radio selection: 1 = Phone Number, 2 = Email (default Email)
   const [selectedMethodId, setSelectedMethodId] = useState<string>("2");
   const [inputValue, setInputValue] = useState("");
+  const [fieldError, setFieldError] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (otpError) {
+      setErrorMessage(otpError);
+    }
+  }, [otpError]);
 
   const radioButtons: RadioButtonProps[] = useMemo(
     () => [
@@ -51,26 +63,58 @@ export default function ForgotPasswordScreen() {
 
   const isEmail = selectedMethodId === "2";
 
-  const handleSendOtp = () => {
-    if (!inputValue.trim()) {
-      Alert.alert(
-        "Required Field",
-        `Please enter your ${isEmail ? "email address" : "phone number"} to receive an OTP.`
+  const handleSendOtp = async () => {
+    const val = inputValue.trim();
+
+    if (!val) {
+      setFieldError(
+        `Please enter your ${isEmail ? "email address" : "phone number"}.`
       );
       return;
     }
 
-    // Navigate to unified dynamic verify.tsx in forgot_password mode
-    router.push({
-      pathname: "/Auth/verify",
-      params: {
-        mode: "forgot_password",
-        selectedMethod: isEmail ? "email" : "phone",
-        email: isEmail ? inputValue.trim() : "",
-        phone: !isEmail ? inputValue.trim() : "",
-        identifier: inputValue.trim(),
-      },
-    });
+    if (isEmail) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(val)) {
+        setFieldError("Please enter a valid email address");
+        return;
+      }
+    } else {
+      const digits = val.replace(/\D/g, "");
+      if (digits.length < 7) {
+        setFieldError("Please enter a valid phone number (at least 7 digits)");
+        return;
+      }
+    }
+
+    setFieldError(null);
+    setErrorMessage(null);
+    dispatch(clearError());
+
+    try {
+      const result = await dispatch(
+        forgotPasswordThunk({ identifier: val })
+      ).unwrap();
+
+      // Navigate to unified dynamic verify.tsx in forgot_password mode
+      router.push({
+        pathname: "/Auth/verify",
+        params: {
+          mode: "forgot_password",
+          selectedMethod: isEmail ? "email" : "phone",
+          email: result.email || (isEmail ? val : ""),
+          phone: result.phone || (!isEmail ? val : ""),
+          identifier: val,
+          name: result.name || "User",
+        },
+      });
+    } catch (err: any) {
+      setErrorMessage(
+        typeof err === "string"
+          ? err
+          : "Failed to send verification code. Please check your details."
+      );
+    }
   };
 
   return (
@@ -88,8 +132,15 @@ export default function ForgotPasswordScreen() {
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace("/Auth/login");
+            }
+          }}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          disabled={otpLoading}
         >
           <Ionicons name="arrow-back" size={20} color="#FFFFFF" />
           <Text style={styles.backButtonText}>Back</Text>
@@ -110,7 +161,11 @@ export default function ForgotPasswordScreen() {
           <View style={styles.radioWrapper}>
             <RadioGroup
               radioButtons={radioButtons}
-              onPress={setSelectedMethodId}
+              onPress={(id) => {
+                setSelectedMethodId(id);
+                setFieldError(null);
+                setErrorMessage(null);
+              }}
               selectedId={selectedMethodId}
               layout="row"
               containerStyle={styles.radioGroupStyle}
@@ -120,24 +175,47 @@ export default function ForgotPasswordScreen() {
           {/* Dynamic Input (Email / Phone Number) */}
           <View style={styles.inputWrapper}>
             <TextInput
-              style={styles.input}
+              style={[
+                styles.input,
+                fieldError || errorMessage ? styles.inputError : null,
+              ]}
               placeholder={isEmail ? "e.g. abc@gmail.com" : "e.g. 98XXXXXXXX"}
               placeholderTextColor="#516A8A"
               value={inputValue}
-              onChangeText={setInputValue}
+              onChangeText={(text) => {
+                setInputValue(text);
+                if (fieldError) setFieldError(null);
+                if (errorMessage) setErrorMessage(null);
+              }}
               keyboardType={isEmail ? "email-address" : "phone-pad"}
               autoCapitalize="none"
               autoCorrect={false}
+              editable={!otpLoading}
             />
+            {fieldError && (
+              <Text style={styles.fieldErrorText}>{fieldError}</Text>
+            )}
           </View>
+
+          {/* Error Banner */}
+          {errorMessage && (
+            <View style={styles.errorBox}>
+              <Text style={styles.errorText}>{errorMessage}</Text>
+            </View>
+          )}
 
           {/* Send OTP Button */}
           <TouchableOpacity
-            style={styles.primaryButton}
+            style={[styles.primaryButton, otpLoading && styles.buttonDisabled]}
             activeOpacity={0.85}
             onPress={handleSendOtp}
+            disabled={otpLoading}
           >
-            <Text style={styles.primaryButtonText}>Send OTP</Text>
+            {otpLoading ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Text style={styles.primaryButtonText}>Send OTP</Text>
+            )}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -191,7 +269,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   inputWrapper: {
-    marginBottom: 24,
+    marginBottom: 16,
   },
   input: {
     height: 48,
@@ -202,6 +280,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     color: "#FFFFFF",
     fontSize: 14.5,
+  },
+  inputError: {
+    borderColor: "#FF5252",
+  },
+  fieldErrorText: {
+    color: "#FF5252",
+    fontSize: 12,
+    marginTop: 5,
+    marginLeft: 2,
+    fontWeight: "500",
+  },
+  errorBox: {
+    backgroundColor: "#2C0B0E",
+    borderWidth: 1,
+    borderColor: "#5A161C",
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 16,
+  },
+  errorText: {
+    color: "#FF5252",
+    fontSize: 12.5,
+    fontWeight: "500",
+    lineHeight: 18,
+    textAlign: "center",
   },
   primaryButton: {
     height: 48,
@@ -214,6 +318,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 6,
     elevation: 3,
+  },
+  buttonDisabled: {
+    opacity: 0.65,
   },
   primaryButtonText: {
     color: "#FFFFFF",

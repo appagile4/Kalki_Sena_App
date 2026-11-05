@@ -4,6 +4,8 @@ import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
+import { useAppDispatch, useAppSelector } from "../../redux/hooks";
+import { logoutUser } from "../../redux/slices/authSlice";
 
 // Reusable Components
 import HomeHeader from "../../components/Home/HomeHeader";
@@ -21,6 +23,8 @@ import {
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const dispatch = useAppDispatch();
+  const { user } = useAppSelector((state) => state.auth);
 
   // Handlers for interactions
   const handleProfilePress = () => {
@@ -37,7 +41,14 @@ export default function HomeScreen() {
       {
         text: "Log Out",
         style: "destructive",
-        onPress: () => router.replace("/Auth/login"),
+        onPress: async () => {
+          try {
+            await dispatch(logoutUser()).unwrap();
+          } catch {
+            // Already handled
+          }
+          router.replace("/Auth/login");
+        },
       },
     ]);
   };
@@ -183,8 +194,9 @@ export default function HomeScreen() {
       >
         {/* 1. Header (User profile, Greeting, Notifications & Logout) */}
         <HomeHeader
-          userName="Subhodip"
+          userName={user?.fullName || "Subhodip"}
           greeting="Namaste"
+          avatarUri={user?.avatar || undefined}
           onProfilePress={handleProfilePress}
           onNotificationPress={handleNotificationPress}
           onLogoutPress={handleLogoutPress}

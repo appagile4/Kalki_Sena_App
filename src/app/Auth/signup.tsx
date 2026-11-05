@@ -2,15 +2,16 @@ import CountryCodeModal, {
   CountryItem,
 } from "../../components/Main/countrycodeModal";
 import DateTimePicker, {
-  DateTimePickerEvent,
+  DateTimePickerChangeEvent,
 } from "@react-native-community/datetimepicker";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
+  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Modal,
@@ -25,10 +26,14 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import RadioGroup, { RadioButtonProps } from "react-native-radio-buttons-group";
+import { useAppDispatch, useAppSelector } from "../../redux/hooks";
+import { registerUser, clearError, sendOtpThunk } from "../../redux/slices/authSlice";
 
 export default function SignupScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const dispatch = useAppDispatch();
+  const { isLoading, error } = useAppSelector((state) => state.auth);
 
   // Avatar Image state
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
@@ -90,6 +95,104 @@ export default function SignupScreen() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
 
+  // Validation Error States
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [dobError, setDobError] = useState<string | null>(null);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [confirmPasswordError, setConfirmPasswordError] = useState<string | null>(null);
+  const [termsError, setTermsError] = useState<string | null>(null);
+  const [serverError, setServerError] = useState<string | null>(null);
+
+  // Sync Redux error with local state
+  useEffect(() => {
+    if (error) {
+      setServerError(error);
+    }
+  }, [error]);
+
+  // Form Validation
+  const validateForm = (): boolean => {
+    let isValid = true;
+
+    // Full Name
+    if (!fullName.trim()) {
+      setNameError("Full name is required");
+      isValid = false;
+    } else if (fullName.trim().length < 2) {
+      setNameError("Full name must be at least 2 characters");
+      isValid = false;
+    } else {
+      setNameError(null);
+    }
+
+    // Date of Birth
+    if (!dob.trim()) {
+      setDobError("Date of birth is required");
+      isValid = false;
+    } else {
+      setDobError(null);
+    }
+
+    // Phone Number
+    const cleanPhone = phoneNumber.trim().replace(/\D/g, "");
+    if (!phoneNumber.trim()) {
+      setPhoneError("Phone number is required");
+      isValid = false;
+    } else if (cleanPhone.length < 7) {
+      setPhoneError("Please enter a valid phone number (at least 7 digits)");
+      isValid = false;
+    } else {
+      setPhoneError(null);
+    }
+
+    // Email
+    const cleanEmail = email.trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!cleanEmail) {
+      setEmailError("Email address is required");
+      isValid = false;
+    } else if (!emailRegex.test(cleanEmail)) {
+      setEmailError("Please enter a valid email address");
+      isValid = false;
+    } else {
+      setEmailError(null);
+    }
+
+    // Password
+    if (!password) {
+      setPasswordError("Password is required");
+      isValid = false;
+    } else if (password.length < 6) {
+      setPasswordError("Password must be at least 6 characters");
+      isValid = false;
+    } else {
+      setPasswordError(null);
+    }
+
+    // Confirm Password
+    if (!confirmPassword) {
+      setConfirmPasswordError("Please confirm your password");
+      isValid = false;
+    } else if (password !== confirmPassword) {
+      setConfirmPasswordError("Passwords do not match");
+      isValid = false;
+    } else {
+      setConfirmPasswordError(null);
+    }
+
+    // Terms
+    if (!agreedToTerms) {
+      setTermsError("You must agree to the Terms and Conditions");
+      isValid = false;
+    } else {
+      setTermsError(null);
+    }
+
+    return isValid;
+  };
+
   // --- Image Picker Handlers ---
   const pickImageFromGallery = async () => {
     try {
@@ -106,11 +209,16 @@ export default function SignupScreen() {
         mediaTypes: ["images"],
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.8,
+        quality: 0.5,
+        base64: true,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        setAvatarUri(result.assets[0].uri);
+        const asset = result.assets[0];
+        const avatarData = asset.base64
+          ? `data:image/jpeg;base64,${asset.base64}`
+          : asset.uri;
+        setAvatarUri(avatarData);
       }
     } catch (error) {
       Alert.alert("Error", "Could not pick image from gallery.");
@@ -130,11 +238,16 @@ export default function SignupScreen() {
       const result = await ImagePicker.launchCameraAsync({
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.8,
+        quality: 0.5,
+        base64: true,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        setAvatarUri(result.assets[0].uri);
+        const asset = result.assets[0];
+        const avatarData = asset.base64
+          ? `data:image/jpeg;base64,${asset.base64}`
+          : asset.uri;
+        setAvatarUri(avatarData);
       }
     } catch (error) {
       Alert.alert("Error", "Could not open camera.");
@@ -149,44 +262,90 @@ export default function SignupScreen() {
     ]);
   };
 
-  // --- Date Picker Handler ---
-  const handleDateChange = (event: DateTimePickerEvent, date?: Date) => {
+  // --- Date Picker Handlers (backward compatible with onValueChange & onChange) ---
+  const handleDateValueChange = (
+    _event: any,
+    date?: Date
+  ) => {
     if (Platform.OS === "android") {
       setShowDatePicker(false);
     }
-    if (event.type === "set" && date) {
+    if (date) {
       setSelectedDate(date);
       const day = String(date.getDate()).padStart(2, "0");
       const month = String(date.getMonth() + 1).padStart(2, "0");
       const year = date.getFullYear();
       setDob(`${day}/${month}/${year}`);
+      if (dobError) setDobError(null);
     }
   };
 
-  const handleSignUp = () => {
-    if (!agreedToTerms) {
-      Alert.alert(
-        "Terms and Conditions",
-        "Please accept the terms and conditions to proceed."
+  // Keep handleDateChange alias so any pending render/callback never throws ReferenceError
+  const handleDateChange = handleDateValueChange;
+
+  const handleDateDismiss = () => {
+    setShowDatePicker(false);
+  };
+
+  const handleSignUp = async () => {
+    if (!validateForm()) {
+      return;
+    }
+
+    setServerError(null);
+    dispatch(clearError());
+
+    const genderObj = radioButtons.find((r) => r.id === selectedGenderId);
+    const gender = genderObj ? (genderObj.value as string) : "Male";
+    const formattedPhone = `${selectedCountry.code} ${phoneNumber.trim()}`;
+
+    try {
+      const result = await dispatch(
+        registerUser({
+          fullName: fullName.trim(),
+          email: email.trim(),
+          phone: formattedPhone,
+          dob: dob.trim(),
+          gender,
+          password,
+          avatar: avatarUri || "",
+        })
+      ).unwrap();
+
+      if (result.success) {
+        // Pre-send the verification OTP via Nodemailer
+        try {
+          await dispatch(
+            sendOtpThunk({
+              email: email.trim(),
+              name: fullName.trim(),
+              type: "signup",
+            })
+          ).unwrap();
+        } catch (otpErr) {
+          console.warn("Could not pre-send OTP:", otpErr);
+        }
+
+        // Route to the verification stage (Email / Phone OTP)
+        router.push({
+          pathname: "/Auth/verify",
+          params: {
+            mode: "signup",
+            name: fullName.trim(),
+            email: email.trim(),
+            phone: formattedPhone,
+            identifier: email.trim(),
+            selectedMethod: "email",
+          },
+        });
+      }
+    } catch (err: any) {
+      setServerError(
+        typeof err === "string"
+          ? err
+          : "Failed to create account. Please try again."
       );
-      return;
     }
-    if (password && confirmPassword && password !== confirmPassword) {
-      Alert.alert("Password Mismatch", "Passwords do not match.");
-      return;
-    }
-    // Proceed to account verification
-    router.push({
-      pathname: "/Auth/verify",
-      params: {
-        mode: "signup",
-        name: fullName.trim() || "User",
-        email: email.trim(),
-        phone: phoneNumber.trim()
-          ? `${selectedCountry.code} ${phoneNumber.trim()}`
-          : "",
-      },
-    });
   };
 
   return (
@@ -208,7 +367,13 @@ export default function SignupScreen() {
         <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => router.back()}
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace("/Auth/login");
+              }
+            }}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
             <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
@@ -250,26 +415,45 @@ export default function SignupScreen() {
 
           {/* Form Fields */}
           <View style={styles.formContainer}>
+            {/* Server Error Banner */}
+            {serverError && (
+              <View style={styles.errorBox}>
+                <Text style={styles.errorText}>{serverError}</Text>
+              </View>
+            )}
+
             {/* Full Name */}
             <View style={styles.fieldGroup}>
               <Text style={styles.label}>Full Name</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, nameError ? styles.inputError : null]}
                 placeholder="e.g John Doe"
                 placeholderTextColor="#516A8A"
                 value={fullName}
-                onChangeText={setFullName}
+                onChangeText={(val) => {
+                  setFullName(val);
+                  if (nameError) setNameError(null);
+                  if (serverError) setServerError(null);
+                }}
                 autoCapitalize="words"
+                editable={!isLoading}
               />
+              {nameError && (
+                <Text style={styles.fieldErrorText}>{nameError}</Text>
+              )}
             </View>
 
             {/* Date of birth with Date Picker */}
             <View style={styles.fieldGroup}>
               <Text style={styles.label}>Date of birth</Text>
               <TouchableOpacity
-                style={styles.inputWithIcon}
+                style={[
+                  styles.inputWithIcon,
+                  dobError ? styles.inputError : null,
+                ]}
                 onPress={() => setShowDatePicker(true)}
                 activeOpacity={0.8}
+                disabled={isLoading}
               >
                 <TextInput
                   style={styles.inputInner}
@@ -287,6 +471,9 @@ export default function SignupScreen() {
                   />
                 </View>
               </TouchableOpacity>
+              {dobError && (
+                <Text style={styles.fieldErrorText}>{dobError}</Text>
+              )}
             </View>
 
             {/* DatePicker Component (Android) */}
@@ -297,7 +484,8 @@ export default function SignupScreen() {
                 display="default"
                 maximumDate={new Date()}
                 minimumDate={new Date(1920, 0, 1)}
-                onChange={handleDateChange}
+                onValueChange={handleDateValueChange}
+                onDismiss={handleDateDismiss}
               />
             )}
 
@@ -343,7 +531,8 @@ export default function SignupScreen() {
                       themeVariant="dark"
                       maximumDate={new Date()}
                       minimumDate={new Date(1920, 0, 1)}
-                      onChange={handleDateChange}
+                      onValueChange={handleDateValueChange}
+                      onDismiss={handleDateDismiss}
                     />
                   </View>
                 </View>
@@ -371,6 +560,7 @@ export default function SignupScreen() {
                   style={styles.countryCodePicker}
                   onPress={() => setShowCountryModal(true)}
                   activeOpacity={0.8}
+                  disabled={isLoading}
                 >
                   <Text style={styles.flagEmoji}>{selectedCountry.flag}</Text>
                   <Text style={styles.countryCodeText}>
@@ -381,42 +571,72 @@ export default function SignupScreen() {
 
                 {/* Phone Input */}
                 <TextInput
-                  style={[styles.input, styles.phoneInput]}
-                  placeholder="e.g John Doe"
+                  style={[
+                    styles.input,
+                    styles.phoneInput,
+                    phoneError ? styles.inputError : null,
+                  ]}
+                  placeholder="e.g 9812345678"
                   placeholderTextColor="#516A8A"
                   value={phoneNumber}
-                  onChangeText={setPhoneNumber}
+                  onChangeText={(val) => {
+                    setPhoneNumber(val);
+                    if (phoneError) setPhoneError(null);
+                    if (serverError) setServerError(null);
+                  }}
                   keyboardType="phone-pad"
+                  editable={!isLoading}
                 />
               </View>
+              {phoneError && (
+                <Text style={styles.fieldErrorText}>{phoneError}</Text>
+              )}
             </View>
 
             {/* Email */}
             <View style={styles.fieldGroup}>
               <Text style={styles.label}>Email</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, emailError ? styles.inputError : null]}
                 placeholder="e.g example@gmail.com"
                 placeholderTextColor="#516A8A"
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={(val) => {
+                  setEmail(val);
+                  if (emailError) setEmailError(null);
+                  if (serverError) setServerError(null);
+                }}
                 keyboardType="email-address"
                 autoCapitalize="none"
+                editable={!isLoading}
               />
+              {emailError && (
+                <Text style={styles.fieldErrorText}>{emailError}</Text>
+              )}
             </View>
 
             {/* Password */}
             <View style={styles.fieldGroup}>
               <Text style={styles.label}>Password</Text>
-              <View style={styles.inputWithIcon}>
+              <View
+                style={[
+                  styles.inputWithIcon,
+                  passwordError ? styles.inputError : null,
+                ]}
+              >
                 <TextInput
                   style={styles.inputInner}
-                  placeholder="password"
+                  placeholder="password (min 6 characters)"
                   placeholderTextColor="#516A8A"
                   value={password}
-                  onChangeText={setPassword}
+                  onChangeText={(val) => {
+                    setPassword(val);
+                    if (passwordError) setPasswordError(null);
+                    if (serverError) setServerError(null);
+                  }}
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
+                  editable={!isLoading}
                 />
                 <TouchableOpacity
                   style={styles.rightIconWrapper}
@@ -429,20 +649,33 @@ export default function SignupScreen() {
                   />
                 </TouchableOpacity>
               </View>
+              {passwordError && (
+                <Text style={styles.fieldErrorText}>{passwordError}</Text>
+              )}
             </View>
 
             {/* Confirm password */}
             <View style={styles.fieldGroup}>
               <Text style={styles.label}>Confirm password</Text>
-              <View style={styles.inputWithIcon}>
+              <View
+                style={[
+                  styles.inputWithIcon,
+                  confirmPasswordError ? styles.inputError : null,
+                ]}
+              >
                 <TextInput
                   style={styles.inputInner}
                   placeholder="confirm password"
                   placeholderTextColor="#516A8A"
                   value={confirmPassword}
-                  onChangeText={setConfirmPassword}
+                  onChangeText={(val) => {
+                    setConfirmPassword(val);
+                    if (confirmPasswordError) setConfirmPasswordError(null);
+                    if (serverError) setServerError(null);
+                  }}
                   secureTextEntry={!showConfirmPassword}
                   autoCapitalize="none"
+                  editable={!isLoading}
                 />
                 <TouchableOpacity
                   style={styles.rightIconWrapper}
@@ -457,35 +690,55 @@ export default function SignupScreen() {
                   />
                 </TouchableOpacity>
               </View>
+              {confirmPasswordError && (
+                <Text style={styles.fieldErrorText}>{confirmPasswordError}</Text>
+              )}
             </View>
 
             {/* Terms and Conditions Checkbox */}
-            <TouchableOpacity
-              style={styles.termsRow}
-              onPress={() => setAgreedToTerms(!agreedToTerms)}
-              activeOpacity={0.8}
-            >
-              <View
-                style={[
-                  styles.checkboxCircle,
-                  agreedToTerms && styles.checkboxCircleSelected,
-                ]}
+            <View style={{ marginBottom: 16 }}>
+              <TouchableOpacity
+                style={styles.termsRow}
+                onPress={() => {
+                  setAgreedToTerms(!agreedToTerms);
+                  if (termsError) setTermsError(null);
+                }}
+                activeOpacity={0.8}
+                disabled={isLoading}
               >
-                {agreedToTerms && <View style={styles.checkboxDot} />}
-              </View>
-              <Text style={styles.termsText}>
-                By signing up you are agree to{" "}
-                <Text style={styles.termsLink}>Terms and condition.</Text>
-              </Text>
-            </TouchableOpacity>
+                <View
+                  style={[
+                    styles.checkboxCircle,
+                    agreedToTerms && styles.checkboxCircleSelected,
+                    termsError && !agreedToTerms ? styles.checkboxError : null,
+                  ]}
+                >
+                  {agreedToTerms && <View style={styles.checkboxDot} />}
+                </View>
+                <Text style={styles.termsText}>
+                  By signing up you are agree to{" "}
+                  <Text style={styles.termsLink}>Terms and condition.</Text>
+                </Text>
+              </TouchableOpacity>
+              {termsError && (
+                <Text style={[styles.fieldErrorText, { marginLeft: 26, marginTop: 2 }]}>
+                  {termsError}
+                </Text>
+              )}
+            </View>
 
             {/* Sign Up Button */}
             <TouchableOpacity
-              style={styles.signUpButton}
+              style={[styles.signUpButton, isLoading && styles.buttonDisabled]}
               activeOpacity={0.85}
               onPress={handleSignUp}
+              disabled={isLoading}
             >
-              <Text style={styles.signUpButtonText}>Sign Up</Text>
+              {isLoading ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.signUpButtonText}>Sign Up</Text>
+              )}
             </TouchableOpacity>
 
             {/* Footer: Already have an account? Login */}
@@ -583,6 +836,29 @@ const styles = StyleSheet.create({
   fieldGroup: {
     marginBottom: 13,
   },
+  fieldErrorText: {
+    color: "#FF5252",
+    fontSize: 12,
+    marginTop: 4,
+    marginLeft: 2,
+    fontWeight: "500",
+  },
+  errorBox: {
+    backgroundColor: "#2C0B0E",
+    borderWidth: 1,
+    borderColor: "#5A161C",
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 14,
+  },
+  errorText: {
+    color: "#FF5252",
+    fontSize: 13,
+    fontWeight: "500",
+    lineHeight: 18,
+    textAlign: "center",
+  },
   label: {
     color: "#E2EEFC",
     fontSize: 13,
@@ -599,6 +875,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     color: "#FFFFFF",
     fontSize: 14,
+  },
+  inputError: {
+    borderColor: "#FF5252",
   },
   inputWithIcon: {
     height: 46,
@@ -675,6 +954,9 @@ const styles = StyleSheet.create({
   checkboxCircleSelected: {
     borderColor: "#2079F2",
   },
+  checkboxError: {
+    borderColor: "#FF5252",
+  },
   checkboxDot: {
     width: 9,
     height: 9,
@@ -701,6 +983,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 6,
     elevation: 3,
+  },
+  buttonDisabled: {
+    opacity: 0.65,
   },
   signUpButtonText: {
     color: "#FFFFFF",

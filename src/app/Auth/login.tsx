@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   StyleSheet,
   Text,
@@ -8,6 +8,7 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -15,6 +16,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import Svg, { Path } from "react-native-svg";
+import { useAppDispatch, useAppSelector } from "../../redux/hooks";
+import { loginUser, clearError } from "../../redux/slices/authSlice";
 
 // --- Gmail Vector Icon ---
 const GmailIcon = ({ size = 18 }: { size?: number }) => {
@@ -48,36 +51,90 @@ const GmailIcon = ({ size = 18 }: { size?: number }) => {
 export default function LoginScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const dispatch = useAppDispatch();
+  const { isLoading, error } = useAppSelector((state) => state.auth);
 
   // Form Fields
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+
+  // Validation & Error States
+  const [identifierError, setIdentifierError] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleLoginPress = () => {
-    // If fields are empty, show error banner matching design
-    if (!identifier.trim() || !password.trim()) {
-      setErrorMessage(
-        "Your Email or Password are Incorrect.\nPlease try again !"
-      );
+  // Sync redux error with local error message
+  useEffect(() => {
+    if (error) {
+      setErrorMessage(error);
+    }
+  }, [error]);
+
+  const validate = (): boolean => {
+    let isValid = true;
+    const cleanId = identifier.trim();
+
+    // 1. Identifier validation (Email or Phone)
+    if (!cleanId) {
+      setIdentifierError("Email or Phone number is required");
+      isValid = false;
+    } else if (cleanId.includes("@")) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(cleanId)) {
+        setIdentifierError("Please enter a valid email address");
+        isValid = false;
+      } else {
+        setIdentifierError(null);
+      }
+    } else {
+      const digitsOnly = cleanId.replace(/\D/g, "");
+      if (digitsOnly.length < 7) {
+        setIdentifierError("Please enter a valid phone number (at least 7 digits)");
+        isValid = false;
+      } else {
+        setIdentifierError(null);
+      }
+    }
+
+    // 2. Password validation
+    if (!password) {
+      setPasswordError("Password is required");
+      isValid = false;
+    } else if (password.length < 6) {
+      setPasswordError("Password must be at least 6 characters");
+      isValid = false;
+    } else {
+      setPasswordError(null);
+    }
+
+    return isValid;
+  };
+
+  const handleLoginPress = async () => {
+    if (!validate()) {
       return;
     }
 
     setErrorMessage(null);
-    const isEmail = identifier.includes("@");
+    dispatch(clearError());
 
-    // Dynamic verification transition for Login
-    router.push({
-      pathname: "/Auth/verify",
-      params: {
-        mode: "login",
-        name: "Subhodip",
-        identifier: identifier.trim(),
-        email: isEmail ? identifier.trim() : "",
-        phone: !isEmail ? identifier.trim() : "",
-      },
-    });
+    try {
+      const result = await dispatch(
+        loginUser({
+          identifier: identifier.trim(),
+          password,
+        })
+      ).unwrap();
+
+      if (result.success) {
+        router.replace("/Home" as any);
+      }
+    } catch (err: any) {
+      setErrorMessage(
+        err || "Your Email or Password are Incorrect.\nPlease try again !"
+      );
+    }
   };
 
   const handleForgotPassword = () => {
@@ -110,7 +167,13 @@ export default function LoginScreen() {
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace("/Onboarding/onBoarding");
+            }
+          }}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
           <Ionicons name="arrow-back" size={20} color="#FFFFFF" />
@@ -137,21 +200,34 @@ export default function LoginScreen() {
           {/* Email / Phone input */}
           <View style={styles.fieldGroup}>
             <TextInput
-              style={styles.input}
+              style={[
+                styles.input,
+                identifierError ? styles.inputError : null,
+              ]}
               placeholder="Email or Phone number"
               placeholderTextColor="#516A8A"
               value={identifier}
               onChangeText={(val) => {
                 setIdentifier(val);
+                if (identifierError) setIdentifierError(null);
                 if (errorMessage) setErrorMessage(null);
               }}
               autoCapitalize="none"
+              editable={!isLoading}
             />
+            {identifierError && (
+              <Text style={styles.fieldErrorText}>{identifierError}</Text>
+            )}
           </View>
 
           {/* Password input */}
           <View style={styles.fieldGroup}>
-            <View style={styles.inputWithIcon}>
+            <View
+              style={[
+                styles.inputWithIcon,
+                passwordError ? styles.inputError : null,
+              ]}
+            >
               <TextInput
                 style={styles.inputInner}
                 placeholder="Enter Your Password"
@@ -159,10 +235,12 @@ export default function LoginScreen() {
                 value={password}
                 onChangeText={(val) => {
                   setPassword(val);
+                  if (passwordError) setPasswordError(null);
                   if (errorMessage) setErrorMessage(null);
                 }}
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
+                editable={!isLoading}
               />
               <TouchableOpacity
                 style={styles.rightIconWrapper}
@@ -175,32 +253,39 @@ export default function LoginScreen() {
                 />
               </TouchableOpacity>
             </View>
+            {passwordError && (
+              <Text style={styles.fieldErrorText}>{passwordError}</Text>
+            )}
           </View>
 
           {/* Error Banner (Matching Design) */}
           {errorMessage && (
             <View style={styles.errorBox}>
               <Text style={styles.errorText}>
-                Your Email or Password are Incorrect.
+                {errorMessage}
               </Text>
-              <Text style={styles.errorSubText}>Please try again !</Text>
             </View>
           )}
 
           {/* Forgotten password? Link */}
           <View style={styles.forgotPasswordRow}>
-            <TouchableOpacity onPress={handleForgotPassword}>
+            <TouchableOpacity onPress={handleForgotPassword} disabled={isLoading}>
               <Text style={styles.forgotPasswordText}>Forgotten password?</Text>
             </TouchableOpacity>
           </View>
 
           {/* Login Button */}
           <TouchableOpacity
-            style={styles.primaryButton}
+            style={[styles.primaryButton, isLoading && styles.buttonDisabled]}
             activeOpacity={0.85}
             onPress={handleLoginPress}
+            disabled={isLoading}
           >
-            <Text style={styles.primaryButtonText}>Login</Text>
+            {isLoading ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Text style={styles.primaryButtonText}>Login</Text>
+            )}
           </TouchableOpacity>
 
           {/* Divider */}
@@ -276,6 +361,13 @@ const styles = StyleSheet.create({
   fieldGroup: {
     marginBottom: 14,
   },
+  fieldErrorText: {
+    color: "#FF5252",
+    fontSize: 12,
+    marginTop: 4,
+    marginLeft: 4,
+    fontWeight: "500",
+  },
   input: {
     height: 48,
     backgroundColor: "#030e1d",
@@ -285,6 +377,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     color: "#FFFFFF",
     fontSize: 14,
+  },
+  inputError: {
+    borderColor: "#FF5252",
   },
   inputWithIcon: {
     height: 48,
@@ -349,6 +444,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 6,
     elevation: 3,
+  },
+  buttonDisabled: {
+    opacity: 0.65,
   },
   primaryButtonText: {
     color: "#FFFFFF",

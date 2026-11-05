@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Animated,
   Easing,
   KeyboardAvoidingView,
@@ -17,6 +18,14 @@ import {
 import RadioGroup, { RadioButtonProps } from "react-native-radio-buttons-group";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle } from "react-native-svg";
+import { useAppDispatch, useAppSelector } from "../../redux/hooks";
+import {
+  clearError,
+  resendOtpThunk,
+  resetPasswordThunk,
+  sendOtpThunk,
+  verifyOtpThunk,
+} from "../../redux/slices/authSlice";
 
 export type VerificationStep =
   | "SELECT_METHOD" // Screen 1: Verify your account
@@ -97,6 +106,23 @@ export default function VerifyScreen() {
   // 5-digit OTP state
   const [otp, setOtp] = useState(["", "", "", "", ""]);
   const inputRefs = useRef<Array<any>>([]);
+
+  // Redux Auth State & Dispatch
+  const dispatch = useAppDispatch();
+  const { otpLoading, otpError } = useAppSelector((state) => state.auth);
+  const [localError, setLocalError] = useState<string | null>(null);
+  const displayError = localError || otpError;
+
+  const targetEmail =
+    params.email ||
+    (params.identifier && params.identifier.includes("@")
+      ? params.identifier
+      : "");
+  const targetPhone =
+    params.phone ||
+    (params.identifier && !params.identifier.includes("@")
+      ? params.identifier
+      : "");
 
   // Resend countdown timer
   const [timer, setTimer] = useState(30);
@@ -221,23 +247,95 @@ export default function VerifyScreen() {
     }
   };
 
-  const handleVerify = () => {
-    transitionTo("VERIFIED_SUCCESS");
+  const handleContinueMethod = async () => {
+    setLocalError(null);
+    dispatch(clearError());
+    if (selectedMethodId === "1" && targetEmail) {
+      try {
+        await dispatch(
+          sendOtpThunk({
+            email: targetEmail,
+            type: mode === "forgot_password" ? "forgot_password" : "signup",
+          }),
+        ).unwrap();
+        transitionTo("ENTER_OTP");
+      } catch (err: any) {
+        setLocalError(
+          typeof err === "string" ? err : "Failed to send OTP to email",
+        );
+      }
+    } else if (selectedMethodId === "2" && targetPhone) {
+      try {
+        await dispatch(
+          sendOtpThunk({
+            phone: targetPhone,
+            type: mode === "forgot_password" ? "forgot_password" : "signup",
+          }),
+        ).unwrap();
+        transitionTo("ENTER_OTP");
+      } catch (err: any) {
+        setLocalError(
+          typeof err === "string" ? err : "Failed to send OTP to phone",
+        );
+      }
+    } else {
+      transitionTo("ENTER_OTP");
+    }
   };
 
-  const handleResend = () => {
-    setTimer(30);
-    setOtp(["", "", "", "", ""]);
-    inputRefs.current[0]?.focus();
+  const handleVerify = async () => {
+    const otpCode = otp.join("");
+    if (otpCode.length !== 5) {
+      setLocalError("Please enter complete 5-digit verification code.");
+      return;
+    }
+    setLocalError(null);
+    dispatch(clearError());
+
+    try {
+      await dispatch(
+        verifyOtpThunk({
+          email: targetEmail || params.identifier || "",
+          otp: otpCode,
+        }),
+      ).unwrap();
+      transitionTo("VERIFIED_SUCCESS");
+    } catch (err: any) {
+      setLocalError(
+        typeof err === "string" ? err : "Invalid or expired verification code.",
+      );
+    }
   };
 
-  const handleSaveNewPassword = () => {
+  const handleResend = async () => {
+    setLocalError(null);
+    dispatch(clearError());
+    try {
+      await dispatch(
+        resendOtpThunk({
+          email: targetEmail || params.identifier || "",
+          type: mode === "forgot_password" ? "forgot_password" : "signup",
+        }),
+      ).unwrap();
+      setTimer(30);
+      setOtp(["", "", "", "", ""]);
+      inputRefs.current[0]?.focus();
+    } catch (err: any) {
+      setLocalError(typeof err === "string" ? err : "Failed to resend code.");
+    }
+  };
+
+  const handleSaveNewPassword = async () => {
     if (!newPassword.trim() || !confirmPassword.trim()) {
       setPasswordError("Please enter and confirm your new password.");
       return;
     }
     if (newPassword !== confirmPassword) {
       setPasswordError("Passwords do not match.");
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPasswordError("Password must be at least 6 characters.");
       return;
     }
     // At least 1 number or special character requirement
@@ -252,7 +350,22 @@ export default function VerifyScreen() {
     }
 
     setPasswordError(null);
-    transitionTo("PASSWORD_CHANGED");
+    setLocalError(null);
+
+    try {
+      await dispatch(
+        resetPasswordThunk({
+          email: targetEmail || params.identifier || "",
+          otp: otp.join(""),
+          newPassword,
+        }),
+      ).unwrap();
+      transitionTo("PASSWORD_CHANGED");
+    } catch (err: any) {
+      setPasswordError(
+        typeof err === "string" ? err : "Failed to reset password.",
+      );
+    }
   };
 
   const spin = spinValue.interpolate({
@@ -281,14 +394,24 @@ export default function VerifyScreen() {
             onPress={() => {
               if (step === "ENTER_OTP") {
                 if (mode === "forgot_password") {
-                  router.back();
+                  if (router.canGoBack()) {
+                    router.back();
+                  } else {
+                    router.replace("/Auth/forgotpassword");
+                  }
                 } else {
                   transitionTo("SELECT_METHOD");
                 }
               } else if (step === "SET_NEW_PASSWORD") {
                 transitionTo("ENTER_OTP");
               } else {
-                router.back();
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.replace(
+                    mode === "signup" ? "/Auth/signup" : "/Auth/login",
+                  );
+                }
               }
             }}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
@@ -323,13 +446,26 @@ export default function VerifyScreen() {
                 />
               </View>
 
+              {/* Error Banner */}
+              {displayError && (
+                <View style={styles.errorBanner}>
+                  <Ionicons name="alert-circle" size={16} color="#FF6B6B" />
+                  <Text style={styles.errorBannerText}>{displayError}</Text>
+                </View>
+              )}
+
               {/* Continue Button */}
               <TouchableOpacity
-                style={styles.primaryButton}
+                style={[styles.primaryButton, otpLoading && { opacity: 0.7 }]}
                 activeOpacity={0.85}
-                onPress={() => transitionTo("ENTER_OTP")}
+                disabled={otpLoading}
+                onPress={handleContinueMethod}
               >
-                <Text style={styles.primaryButtonText}>Continue</Text>
+                {otpLoading ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <Text style={styles.primaryButtonText}>Continue</Text>
+                )}
               </TouchableOpacity>
             </View>
           )}
@@ -366,13 +502,26 @@ export default function VerifyScreen() {
                 ))}
               </View>
 
+              {/* Error Banner */}
+              {displayError && (
+                <View style={styles.errorBanner}>
+                  <Ionicons name="alert-circle" size={16} color="#FF6B6B" />
+                  <Text style={styles.errorBannerText}>{displayError}</Text>
+                </View>
+              )}
+
               {/* Verify Button */}
               <TouchableOpacity
-                style={styles.primaryButton}
+                style={[styles.primaryButton, otpLoading && { opacity: 0.7 }]}
                 activeOpacity={0.85}
+                disabled={otpLoading}
                 onPress={handleVerify}
               >
-                <Text style={styles.primaryButtonText}>Verify</Text>
+                {otpLoading ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <Text style={styles.primaryButtonText}>Verify</Text>
+                )}
               </TouchableOpacity>
 
               {/* Resend Link */}
@@ -479,11 +628,16 @@ export default function VerifyScreen() {
 
               {/* Save Button */}
               <TouchableOpacity
-                style={styles.primaryButton}
+                style={[styles.primaryButton, otpLoading && { opacity: 0.7 }]}
                 activeOpacity={0.85}
+                disabled={otpLoading}
                 onPress={handleSaveNewPassword}
               >
-                <Text style={styles.primaryButtonText}>Save</Text>
+                {otpLoading ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <Text style={styles.primaryButtonText}>Save</Text>
+                )}
               </TouchableOpacity>
             </View>
           )}
@@ -656,6 +810,25 @@ const styles = StyleSheet.create({
     color: "#000000",
     fontSize: 22,
     fontWeight: "700",
+  },
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(239, 68, 68, 0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(239, 68, 68, 0.4)",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 16,
+    gap: 8,
+    width: "100%",
+  },
+  errorBannerText: {
+    color: "#FF8F8F",
+    fontSize: 13,
+    fontWeight: "500",
+    flex: 1,
   },
   resendRow: {
     flexDirection: "row",

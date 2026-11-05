@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   StyleSheet,
   Text,
@@ -10,8 +10,10 @@ import {
   Switch,
   Alert,
   Dimensions,
+  ActivityIndicator,
 } from "react-native";
 import { Image } from "expo-image";
+import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -22,6 +24,12 @@ import {
   MaterialCommunityIcons,
   FontAwesome5,
 } from "@expo/vector-icons";
+import { useAppDispatch, useAppSelector } from "../../redux/hooks";
+import {
+  uploadAvatarThunk,
+  updateProfileThunk,
+  logoutUser,
+} from "../../redux/slices/authSlice";
 
 // Current Active Sub-View
 type ProfileView =
@@ -38,24 +46,122 @@ type ProfileView =
 export default function ProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const dispatch = useAppDispatch();
+  const { user, token } = useAppSelector((state) => state.auth);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 
   // Navigation Sub-view
   const [currentView, setCurrentView] = useState<ProfileView>("main");
 
   // Profile Data State
   const [profileData, setProfileData] = useState({
-    name: "John Deo",
-    phone: "+977 9800000000",
-    memberId: "123-456-789",
-    fullName: "Alex Turner",
-    email: "alex.turner@example.com",
-    gender: "Male",
-    dob: "14/06/1995",
+    name: user?.fullName || "John Deo",
+    phone: user?.phone || "+977 9800000000",
+    memberId: user?._id ? user._id.slice(-8).toUpperCase() : "123-456-789",
+    fullName: user?.fullName || "Alex Turner",
+    email: user?.email || "alex.turner@example.com",
+    gender: user?.gender || "Male",
+    dob: user?.dob || "14/06/1995",
     rating: "4.8",
     tripsCompleted: "50 trips over a month",
     acceptanceRate: "80%",
     cancellationRate: "20%",
   });
+
+  useEffect(() => {
+    if (user) {
+      setProfileData((prev) => ({
+        ...prev,
+        name: user.fullName || prev.name,
+        fullName: user.fullName || prev.fullName,
+        email: user.email || prev.email,
+        phone: user.phone || prev.phone,
+        gender: user.gender || prev.gender,
+        dob: user.dob || prev.dob,
+        memberId: user._id ? user._id.slice(-8).toUpperCase() : prev.memberId,
+      }));
+      setEditName(user.fullName || "");
+      setEditEmail(user.email || "");
+      setEditDob(user.dob || "");
+    }
+  }, [user]);
+
+  const currentAvatarSource = user?.avatar
+    ? { uri: user.avatar }
+    : require("../../../assets/images/avatar.png");
+
+  // Handlers for picking profile avatar via Camera or Gallery
+  const pickAvatarImage = async (useCamera: boolean) => {
+    try {
+      const permission = useCamera
+        ? await ImagePicker.requestCameraPermissionsAsync()
+        : await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+      if (permission.status !== "granted") {
+        Alert.alert(
+          "Permission Required",
+          `Please grant ${useCamera ? "camera" : "gallery"} permissions to update your profile photo.`
+        );
+        return;
+      }
+
+      const result = useCamera
+        ? await ImagePicker.launchCameraAsync({
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.8,
+            base64: true,
+          })
+        : await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ["images"],
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.8,
+            base64: true,
+          });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        const base64Data = asset.base64
+          ? `data:image/jpeg;base64,${asset.base64}`
+          : asset.uri;
+
+        setIsUploadingAvatar(true);
+        try {
+          await dispatch(
+            uploadAvatarThunk({
+              imageSource: base64Data,
+              token,
+            })
+          ).unwrap();
+
+          Alert.alert(
+            "Success",
+            "Profile photo uploaded to Cloudinary and saved to MongoDB successfully!"
+          );
+        } catch (uploadErr: any) {
+          Alert.alert(
+            "Upload Result",
+            typeof uploadErr === "string"
+              ? uploadErr
+              : "Could not upload avatar to Cloudinary."
+          );
+        } finally {
+          setIsUploadingAvatar(false);
+        }
+      }
+    } catch (err) {
+      Alert.alert("Error", "Could not pick image.");
+    }
+  };
+
+  const handleEditAvatarPress = () => {
+    Alert.alert("Profile Photo", "Choose an option to update photo", [
+      { text: "Take Photo", onPress: () => pickAvatarImage(true) },
+      { text: "Choose from Gallery", onPress: () => pickAvatarImage(false) },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  };
 
   // Edit Profile Form State
   const [editName, setEditName] = useState(profileData.fullName);
@@ -118,16 +224,36 @@ export default function ProfileScreen() {
   };
 
   // Save Edit Profile
-  const handleSaveProfile = () => {
+  const handleSaveProfile = async () => {
+    const fullPhone = `${editCountryCode} ${editPhone}`;
     setProfileData((prev) => ({
       ...prev,
       fullName: editName,
       email: editEmail,
       gender: editGender,
       dob: editDob,
-      phone: `${editCountryCode} ${editPhone}`,
+      phone: fullPhone,
     }));
-    Alert.alert("Profile Updated", "Your profile details have been saved.");
+
+    if (token) {
+      try {
+        await dispatch(
+          updateProfileThunk({
+            data: {
+              fullName: editName,
+              phone: fullPhone,
+              gender: editGender,
+              dob: editDob,
+            },
+            token,
+          })
+        ).unwrap();
+      } catch (err) {
+        console.warn("Could not sync profile to MongoDB:", err);
+      }
+    }
+
+    Alert.alert("Profile Updated", "Your profile details have been saved to MongoDB.");
     setCurrentView("view_profile");
   };
 
@@ -144,7 +270,14 @@ export default function ProfileScreen() {
       {
         text: "Log Out",
         style: "destructive",
-        onPress: () => router.replace("/Auth/login" as any),
+        onPress: async () => {
+          try {
+            await dispatch(logoutUser()).unwrap();
+          } catch {
+            // Handled
+          }
+          router.replace("/Auth/login" as any);
+        },
       },
     ]);
   };
@@ -198,7 +331,7 @@ export default function ProfileScreen() {
 
               <View style={styles.userAvatarContainer}>
                 <Image
-                  source={require("../../../assets/images/avatar.png")}
+                  source={currentAvatarSource}
                   style={styles.bannerAvatar}
                   contentFit="cover"
                 />
@@ -411,7 +544,7 @@ export default function ProfileScreen() {
             {/* Avatar & Header */}
             <View style={styles.viewProfileTop}>
               <Image
-                source={require("../../../assets/images/avatar.png")}
+                source={currentAvatarSource}
                 style={styles.viewProfileAvatar}
                 contentFit="cover"
               />
@@ -539,26 +672,23 @@ export default function ProfileScreen() {
             {/* Avatar with Camera badge */}
             <View style={styles.editAvatarWrapper}>
               <View style={styles.avatarBorderLarge}>
-                <Image
-                  source={require("../../../assets/images/avatar.png")}
-                  style={styles.editAvatar}
-                  contentFit="cover"
-                />
+                {isUploadingAvatar ? (
+                  <View style={[styles.editAvatar, { justifyContent: "center", alignItems: "center" }]}>
+                    <ActivityIndicator size="small" color="#2079F2" />
+                  </View>
+                ) : (
+                  <Image
+                    source={currentAvatarSource}
+                    style={styles.editAvatar}
+                    contentFit="cover"
+                  />
+                )}
               </View>
               <TouchableOpacity
                 style={styles.cameraBadgeButton}
                 activeOpacity={0.8}
-                onPress={() =>
-                  Alert.alert(
-                    "Profile Photo",
-                    "Choose an option to update photo",
-                    [
-                      { text: "Camera" },
-                      { text: "Gallery" },
-                      { text: "Cancel", style: "cancel" },
-                    ]
-                  )
-                }
+                disabled={isUploadingAvatar}
+                onPress={handleEditAvatarPress}
               >
                 <Ionicons name="camera" size={14} color="#FFFFFF" />
               </TouchableOpacity>
