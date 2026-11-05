@@ -3,6 +3,7 @@ const rateLimit = require("express-rate-limit");
 const {
   signup,
   login,
+  googleLogin,
   sendOtp,
   resendOtp,
   verifyOtp,
@@ -81,6 +82,7 @@ const otpLimiter = rateLimit({
 // Core Authentication
 router.post("/signup", authLimiter, validateSignup, signup);
 router.post("/login", authLimiter, validateLogin, login);
+router.post("/google", authLimiter, googleLogin);
 router.post("/logout", optionalProtect, logout);
 router.get("/me", protect, getMe);
 

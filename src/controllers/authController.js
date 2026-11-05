@@ -4,6 +4,8 @@ const generateOtp = require("../utils/generateOtp");
 const { sendOtpEmail } = require("../services/emailService");
 const { uploadAvatarToCloudinary } = require("../services/cloudinaryService");
 const bcrypt = require("bcryptjs");
+const { OAuth2Client } = require("google-auth-library");
+const googleClient = new OAuth2Client();
 
 /**
  * @desc    Register a new user
@@ -562,9 +564,151 @@ const logout = async (req, res) => {
   });
 };
 
+/**
+ * @desc    Google Sign-In Authentication
+ * @route   POST /api/auth/google
+ * @access  Public
+ */
+const googleLogin = async (req, res, next) => {
+  try {
+    const { idToken } = req.body;
+
+    if (!idToken) {
+      return res.status(400).json({
+        success: false,
+        message: "Google ID Token is required",
+      });
+    }
+
+    // Verify Google ID Token with Google OAuth2Client
+    let ticket;
+    try {
+      const allowedAudiences = [
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_IOS_CLIENT_ID,
+        "284669757325-c1vm3h23si9e9hk7ued21o3020tbtt8p.apps.googleusercontent.com",
+        "284669757325-vr2oqodqkpk2tpb0u46nvb09plbriuq5.apps.googleusercontent.com",
+      ].filter(Boolean);
+
+      ticket = await googleClient.verifyIdToken({
+        idToken,
+        audience: allowedAudiences,
+      });
+    } catch (verifyError) {
+      console.error("[Google Auth] ID Token verification failed:", verifyError.message);
+      return res.status(401).json({
+        success: false,
+        message: "Invalid or expired Google authentication token. Please try again.",
+      });
+    }
+
+    const payload = ticket.getPayload();
+    if (!payload) {
+      return res.status(401).json({
+        success: false,
+        message: "Unable to retrieve Google user information",
+      });
+    }
+
+    const { sub: googleId, email, name, picture, email_verified } = payload;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Google account does not have an associated email address",
+      });
+    }
+
+    if (!email_verified) {
+      return res.status(400).json({
+        success: false,
+        message: "Google email address is not verified. Please verify your email with Google.",
+      });
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+
+    // 1. Check if user exists by stable googleId
+    let user = await User.findOne({ googleId });
+
+    if (user) {
+      // Check if account is suspended / blocked
+      if (user.isBlocked) {
+        return res.status(403).json({
+          success: false,
+          message: "Your account has been suspended or blocked. Please contact support.",
+        });
+      }
+
+      // Update avatar or name if missing
+      let modified = false;
+      if (!user.avatar && picture) {
+        user.avatar = picture;
+        modified = true;
+      }
+      if (!user.fullName && name) {
+        user.fullName = name;
+        modified = true;
+      }
+      if (modified) {
+        await user.save();
+      }
+    } else {
+      // 2. Check if user exists with the same email (Secure Account Linking)
+      user = await User.findOne({ email: cleanEmail });
+
+      if (user) {
+        if (user.isBlocked) {
+          return res.status(403).json({
+            success: false,
+            message: "Your account has been suspended or blocked. Please contact support.",
+          });
+        }
+
+        // Link Google ID to existing account securely (Google proved email ownership)
+        user.googleId = googleId;
+        user.isVerified = true;
+        if (!user.avatar && picture) {
+          user.avatar = picture;
+        }
+        await user.save();
+      } else {
+        // 3. New User Registration via Google
+        user = await User.create({
+          fullName: name || "Google User",
+          email: cleanEmail,
+          googleId,
+          authProvider: "google",
+          avatar: picture || "",
+          role: "user",
+          isVerified: true,
+        });
+      }
+    }
+
+    // Generate Application JWT Token
+    const token = user.generateAuthToken();
+
+    res.status(200).json({
+      success: true,
+      message: "Google login successful",
+      token,
+      user,
+      data: {
+        user,
+        accessToken: token,
+        token,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   signup,
   login,
+  googleLogin,
   sendOtp,
   resendOtp,
   verifyOtp,
