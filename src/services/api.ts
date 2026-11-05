@@ -21,6 +21,8 @@ export const API_BASE_URL = getBaseUrl();
 export interface ApiResponse<T = any> {
   success: boolean;
   message?: string;
+  data?: any;
+  count?: number;
   token?: string;
   user?: T;
   email?: string;
@@ -395,6 +397,48 @@ export const apiService = {
       // Regardless of network failures, clear local credentials
       await secureStorage.clearAuthStorage();
       return { success: true, message: "Logged out locally" };
+    }
+  },
+
+  // Book Orders & Details
+  createBookOrder: async (payload: any, token?: string | null): Promise<ApiResponse> => {
+    try {
+      const headers = await getAuthHeaders(token);
+      const response = await fetch(`${API_BASE_URL}/books/orders`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+      });
+      return await response.json();
+    } catch (error: any) {
+      throw new Error(error.message || "Failed to place book order");
+    }
+  },
+
+  getBookDetails: async (): Promise<ApiResponse> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/books`);
+      return await response.json();
+    } catch (error: any) {
+      throw new Error(error.message || "Failed to fetch book details");
+    }
+  },
+
+  getClinics: async (): Promise<ApiResponse> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/books/clinics`);
+      return await response.json();
+    } catch (error: any) {
+      throw new Error(error.message || "Failed to fetch clinic branches");
+    }
+  },
+
+  getPromoVideo: async (): Promise<ApiResponse> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/books/promo-video`);
+      return await response.json();
+    } catch (error: any) {
+      throw new Error(error.message || "Failed to fetch promo video");
     }
   },
 };

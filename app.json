@@ -10,7 +10,10 @@
     "ios": {
       "bundleIdentifier": "com.agileapp977.kalkisenadrive",
       "googleServicesFile": "./GoogleService-Info.plist",
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "config": {
+        "googleMapsApiKey": "AIzaSyBxnSInFpg3Ds3frC6HUBA9xOyBJ0ftx3U"
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -21,9 +24,16 @@
       },
       "predictiveBackGestureEnabled": false,
       "permissions": [
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
       ],
-      "package": "com.agileapp977.Kalki_Sena_Drive"
+      "package": "com.agileapp977.Kalki_Sena_Drive",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyBxnSInFpg3Ds3frC6HUBA9xOyBJ0ftx3U"
+        }
+      }
     },
     "web": {
       "output": "server",
@@ -52,7 +62,8 @@
         {
           "iosUrlScheme": "com.googleusercontent.apps.284669757325-vr2oqodqkpk2tpb0u46nvb09plbriuq5"
         }
-      ]
+      ],
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true,

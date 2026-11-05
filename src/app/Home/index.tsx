@@ -138,7 +138,7 @@ export default function HomeScreen() {
   };
 
   const handlePlayVideo = () => {
-    Alert.alert("Video Message", "Playing message from MR.666...");
+    // Fullscreen video player is handled within PromoCards
   };
 
   const handleBuyBook = () => {
@@ -254,8 +254,6 @@ export default function HomeScreen() {
 
         {/* 4. Promotional Cards (Video message & Buy book) */}
         <PromoCards
-          videoTitle="Message form MR.666"
-          bookTitle="Buy book to support Gen Z free education"
           onPlayPress={handlePlayVideo}
           onBuyBookPress={handleBuyBook}
         />
