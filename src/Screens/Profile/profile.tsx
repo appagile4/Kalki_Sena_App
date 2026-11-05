@@ -24,6 +24,7 @@ import {
   logoutUser,
   updateProfileThunk,
   uploadAvatarThunk,
+  setPasswordThunk,
 } from "../../redux/slices/authSlice";
 
 // Current Active Sub-View
@@ -1640,7 +1641,7 @@ export default function ProfileScreen() {
       </Modal>
 
       {/* ========================================================= */}
-      {/* MODAL 5: CHANGE PASSWORD                                  */}
+      {/* MODAL 5: CHANGE / SET PASSWORD                            */}
       {/* ========================================================= */}
       <Modal
         visible={showPasswordModal}
@@ -1651,7 +1652,11 @@ export default function ProfileScreen() {
         <View style={styles.modalOverlayDark}>
           <View style={styles.modalContentCard}>
             <View style={styles.modalTopBar}>
-              <Text style={styles.modalHeaderTitle}>Change Password</Text>
+              <Text style={styles.modalHeaderTitle}>
+                {user?.authProvider === "google" && !user?.hasPassword
+                  ? "Set Account Password"
+                  : "Change Password"}
+              </Text>
               <TouchableOpacity
                 onPress={() => setShowPasswordModal(false)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -1660,23 +1665,26 @@ export default function ProfileScreen() {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.modalInputBox}>
-              <TextInput
-                style={styles.modalTextInput}
-                value={oldPassword}
-                onChangeText={setOldPassword}
-                placeholder="Old Password"
-                placeholderTextColor="#64748B"
-                secureTextEntry
-              />
-            </View>
+            {/* Only show old password input if user already has a password */}
+            {user?.hasPassword && (
+              <View style={styles.modalInputBox}>
+                <TextInput
+                  style={styles.modalTextInput}
+                  value={oldPassword}
+                  onChangeText={setOldPassword}
+                  placeholder="Old Password"
+                  placeholderTextColor="#64748B"
+                  secureTextEntry
+                />
+              </View>
+            )}
 
             <View style={styles.modalInputBox}>
               <TextInput
                 style={styles.modalTextInput}
                 value={newPassword}
                 onChangeText={setNewPassword}
-                placeholder="New Password"
+                placeholder="New Password (min 6 chars)"
                 placeholderTextColor="#64748B"
                 secureTextEntry
               />
@@ -1695,19 +1703,32 @@ export default function ProfileScreen() {
 
             <TouchableOpacity
               style={styles.modalPrimaryBtn}
-              onPress={() => {
-                if (!newPassword || newPassword !== confirmPassword) {
+              onPress={async () => {
+                if (!newPassword || newPassword.length < 6) {
+                  Alert.alert("Error", "Password must be at least 6 characters.");
+                  return;
+                }
+                if (newPassword !== confirmPassword) {
                   Alert.alert("Error", "Passwords do not match.");
                   return;
                 }
-                setShowPasswordModal(false);
-                setOldPassword("");
-                setNewPassword("");
-                setConfirmPassword("");
-                Alert.alert(
-                  "Password Changed",
-                  "Your password was updated successfully.",
-                );
+                try {
+                  await dispatch(
+                    setPasswordThunk({
+                      password: newPassword,
+                    })
+                  ).unwrap();
+                  setShowPasswordModal(false);
+                  setOldPassword("");
+                  setNewPassword("");
+                  setConfirmPassword("");
+                  Alert.alert(
+                    "Success",
+                    "Your password has been updated successfully."
+                  );
+                } catch (err: any) {
+                  Alert.alert("Error", err || "Failed to update password.");
+                }
               }}
             >
               <Text style={styles.modalPrimaryBtnText}>Confirm</Text>

@@ -65,7 +65,12 @@ export const configureGoogleSignIn = () => {
       webClientId: GOOGLE_WEB_CLIENT_ID,
       iosClientId: Platform.OS === "ios" ? GOOGLE_IOS_CLIENT_ID : undefined,
       offlineAccess: false,
-      scopes: ["profile", "email"],
+      scopes: [
+        "profile",
+        "email",
+        "https://www.googleapis.com/auth/user.birthday.read",
+        "https://www.googleapis.com/auth/user.gender.read",
+      ],
     });
     isConfigured = true;
   } catch (error) {
@@ -76,6 +81,9 @@ export const configureGoogleSignIn = () => {
 export interface GoogleAuthResult {
   success: boolean;
   idToken?: string;
+  accessToken?: string;
+  dob?: string;
+  gender?: string;
   cancelled?: boolean;
   error?: string;
 }
@@ -127,11 +135,17 @@ export const googleAuthService = {
 
       if (response.type === "success" && response.data) {
         let idToken = response.data.idToken;
+        let accessToken: string | undefined;
 
-        // Fallback: If idToken is missing in response, attempt getTokens()
-        if (!idToken) {
+        // Fetch tokens (idToken + accessToken)
+        try {
           const tokens = await GoogleSignin.getTokens();
-          idToken = tokens.idToken;
+          if (tokens) {
+            if (!idToken) idToken = tokens.idToken;
+            accessToken = tokens.accessToken;
+          }
+        } catch (tokenErr) {
+          console.warn("[GoogleAuth] getTokens() warning:", tokenErr);
         }
 
         if (!idToken) {
@@ -141,9 +155,80 @@ export const googleAuthService = {
           };
         }
 
+        let dob: string | undefined;
+        let gender: string | undefined;
+
+        // If accessToken is available, query People API for birthday & gender
+        if (accessToken) {
+          try {
+            const peopleRes = await fetch(
+              "https://people.googleapis.com/v1/people/me?personFields=birthdays,genders",
+              {
+                headers: {
+                  Authorization: `Bearer ${accessToken}`,
+                  Accept: "application/json",
+                },
+              }
+            );
+
+            if (peopleRes.ok) {
+              const peopleData = await peopleRes.json();
+
+              // Parse Birthday (DD/MM/YYYY)
+              if (peopleData.birthdays && Array.isArray(peopleData.birthdays)) {
+                const bday =
+                  peopleData.birthdays.find(
+                    (b: any) => b.date && b.metadata?.primary
+                  ) ||
+                  peopleData.birthdays.find((b: any) => b.date) ||
+                  peopleData.birthdays[0];
+
+                if (bday?.date) {
+                  const { day, month, year } = bday.date;
+                  if (day && month) {
+                    const dd = String(day).padStart(2, "0");
+                    const mm = String(month).padStart(2, "0");
+                    dob = year ? `${dd}/${mm}/${year}` : `${dd}/${mm}`;
+                  }
+                }
+              }
+
+              // Parse Gender (Male / Female / Other)
+              if (peopleData.genders && Array.isArray(peopleData.genders)) {
+                const gObj =
+                  peopleData.genders.find(
+                    (g: any) => g.value && g.metadata?.primary
+                  ) || peopleData.genders[0];
+
+                const rawVal = (
+                  gObj?.value ||
+                  gObj?.formattedValue ||
+                  ""
+                ).toLowerCase();
+
+                if (rawVal.includes("male") && !rawVal.includes("female")) {
+                  gender = "Male";
+                } else if (rawVal.includes("female")) {
+                  gender = "Female";
+                } else if (rawVal) {
+                  gender = "Other";
+                }
+              }
+            }
+          } catch (peopleErr) {
+            console.warn(
+              "[GoogleAuth] Google People API fetch non-fatal error:",
+              peopleErr
+            );
+          }
+        }
+
         return {
           success: true,
           idToken,
+          accessToken,
+          dob,
+          gender,
         };
       }
 

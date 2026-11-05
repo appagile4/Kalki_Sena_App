@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { StyleSheet, View, ScrollView, Alert } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -15,6 +15,7 @@ import PromoCards from "../../components/Home/PromoCards";
 import ServiceList from "../../components/Home/ServiceList";
 import SocialLinks from "../../components/Home/SocialLinks";
 import LoginPromptCard from "../../components/Home/LoginPromptCard";
+import SetPasswordModal from "../../components/Auth/SetPasswordModal";
 import {
   QuickActionItem,
   CommunityProgramItem,
@@ -26,6 +27,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const { user, isAuthenticated } = useAppSelector((state) => state.auth);
+  const [showSetPasswordModal, setShowSetPasswordModal] = useState(false);
 
   // Handlers for interactions
   const handleProfilePress = () => {
@@ -40,6 +42,13 @@ export default function HomeScreen() {
       );
       return;
     }
+
+    // If user signed in with Google and has not set a password yet, show password setup modal
+    if (user?.authProvider === "google" && !user?.hasPassword) {
+      setShowSetPasswordModal(true);
+      return;
+    }
+
     router.push("/Home/profile" as any);
   };
 
@@ -267,6 +276,16 @@ export default function HomeScreen() {
           onSosPress={() => router.push("/Home/emergencySOS" as any)}
         />
       </ScrollView>
+
+      {/* Set Password Modal for Google OAuth Users */}
+      <SetPasswordModal
+        visible={showSetPasswordModal}
+        onClose={() => setShowSetPasswordModal(false)}
+        onSuccess={() => {
+          setShowSetPasswordModal(false);
+          router.push("/Home/profile" as any);
+        }}
+      />
     </View>
   );
 }

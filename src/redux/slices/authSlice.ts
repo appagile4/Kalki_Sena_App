@@ -23,6 +23,7 @@ export interface User {
   googleId?: string;
   authProvider?: string;
   isVerified?: boolean;
+  hasPassword?: boolean;
   createdAt?: string;
 }
 
@@ -163,7 +164,11 @@ export const googleLoginThunk = createAsyncThunk(
         });
       }
 
-      const response = await apiService.googleLogin(googleResult.idToken);
+      const response = await apiService.googleLogin(
+        googleResult.idToken,
+        googleResult.dob,
+        googleResult.gender
+      );
       if (response.token) {
         await secureStorage.saveAccessToken(response.token);
       }
@@ -266,6 +271,26 @@ export const resetPasswordThunk = createAsyncThunk(
       return response;
     } catch (error: any) {
       return rejectWithValue(error.message || "Failed to reset password");
+    }
+  }
+);
+
+// Async Thunk: Set Password (for Google sign-in accounts or new password)
+export const setPasswordThunk = createAsyncThunk(
+  "auth/setPassword",
+  async (
+    payload: { password: string; dob?: string; gender?: string },
+    { getState, rejectWithValue }
+  ) => {
+    try {
+      const state = (getState() as { auth: AuthState }).auth;
+      const response = await apiService.setPassword(payload, state.token);
+      if (response.user) {
+        await secureStorage.saveUser(response.user);
+      }
+      return response;
+    } catch (error: any) {
+      return rejectWithValue(error.message || "Failed to set account password");
     }
   }
 );
@@ -603,6 +628,34 @@ export const authSlice = createSlice({
       .addCase(resetPasswordThunk.rejected, (state, action) => {
         state.otpLoading = false;
         state.otpError = (action.payload as string) || "Failed to reset password";
+      });
+
+    // --- Set Password ---
+    builder
+      .addCase(setPasswordThunk.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(setPasswordThunk.fulfilled, (state, action) => {
+        state.isLoading = false;
+        if (action.payload?.user) {
+          state.user = {
+            ...state.user,
+            ...action.payload.user,
+            hasPassword: true,
+          };
+        } else if (state.user) {
+          state.user = {
+            ...state.user,
+            hasPassword: true,
+          };
+        }
+        state.successMessage = "Password set successfully!";
+        state.error = null;
+      })
+      .addCase(setPasswordThunk.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = (action.payload as string) || "Failed to set password";
       });
 
     // --- Fetch Current User ---

@@ -87,7 +87,11 @@ export const getAuthHeaders = async (
 
 export const apiService = {
   // Google Sign-In Request
-  googleLogin: async (idToken: string): Promise<ApiResponse> => {
+  googleLogin: async (
+    idToken: string,
+    dob?: string,
+    gender?: string
+  ): Promise<ApiResponse> => {
     try {
       const response = await fetch(`${API_BASE_URL}/auth/google`, {
         method: "POST",
@@ -95,7 +99,7 @@ export const apiService = {
           "Content-Type": "application/json",
           Accept: "application/json",
         },
-        body: JSON.stringify({ idToken }),
+        body: JSON.stringify({ idToken, dob, gender }),
       });
 
       const data = await response.json();
@@ -106,6 +110,31 @@ export const apiService = {
     } catch (error: any) {
       throw new Error(
         error.message || "Google authentication request failed. Check server."
+      );
+    }
+  },
+
+  // Set Password Request (for Google OAuth users or setting account password)
+  setPassword: async (
+    payload: { password: string; dob?: string; gender?: string },
+    token?: string | null
+  ): Promise<ApiResponse> => {
+    try {
+      const headers = await getAuthHeaders(token);
+      const response = await fetch(`${API_BASE_URL}/auth/set-password`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to set password");
+      }
+      return data;
+    } catch (error: any) {
+      throw new Error(
+        error.message || "Failed to set password. Check server connection."
       );
     }
   },
