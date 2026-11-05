@@ -1,0 +1,577 @@
+const User = require("../models/User");
+const Otp = require("../models/Otp");
+const generateOtp = require("../utils/generateOtp");
+const { sendOtpEmail } = require("../services/emailService");
+const { uploadAvatarToCloudinary } = require("../services/cloudinaryService");
+const bcrypt = require("bcryptjs");
+
+/**
+ * @desc    Register a new user
+ * @route   POST /api/auth/signup
+ * @access  Public
+ */
+const signup = async (req, res, next) => {
+  try {
+    const { fullName, email, phone, dob, gender, password, avatar } = req.body;
+
+    // Check if email already registered
+    const existingEmail = await User.findOne({ email: email.toLowerCase() });
+    if (existingEmail) {
+      return res.status(400).json({
+        success: false,
+        message: "An account with this email address already exists.",
+      });
+    }
+
+    // Check if phone number already registered
+    const existingPhone = await User.findOne({ phone: phone.trim() });
+    if (existingPhone) {
+      return res.status(400).json({
+        success: false,
+        message: "An account with this phone number already exists.",
+      });
+    }
+
+    // Handle avatar upload to Cloudinary if provided
+    let avatarUrl = "";
+    if (avatar && typeof avatar === "string" && avatar.trim()) {
+      const cleanAvatar = avatar.trim();
+      if (cleanAvatar.startsWith("http://") || cleanAvatar.startsWith("https://")) {
+        avatarUrl = cleanAvatar;
+      } else {
+        try {
+          const uploadRes = await uploadAvatarToCloudinary(cleanAvatar);
+          avatarUrl = uploadRes.url;
+        } catch (uploadErr) {
+          console.warn("[Cloudinary] Upload in signup warning:", uploadErr.message);
+          avatarUrl = "";
+        }
+      }
+    }
+
+    // Create user
+    const user = await User.create({
+      fullName: fullName.trim(),
+      email: email.toLowerCase().trim(),
+      phone: phone.trim(),
+      dob: dob ? dob.trim() : "",
+      gender: gender || "Male",
+      password,
+      avatar: avatarUrl,
+    });
+
+    // Generate JWT Token
+    const token = user.generateAuthToken();
+
+    res.status(201).json({
+      success: true,
+      message: "Account created successfully",
+      token,
+      user,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Authenticate user & get token
+ * @route   POST /api/auth/login
+ * @access  Public
+ */
+const login = async (req, res, next) => {
+  try {
+    const { identifier, password } = req.body;
+    const cleanIdentifier = identifier.trim();
+
+    // Check whether identifier is email or phone
+    const isEmail = cleanIdentifier.includes("@");
+
+    let query;
+    if (isEmail) {
+      query = { email: cleanIdentifier.toLowerCase() };
+    } else {
+      // Allow matching either exact phone or stripped digit variation
+      const digitsOnly = cleanIdentifier.replace(/\D/g, "");
+      query = {
+        $or: [
+          { phone: cleanIdentifier },
+          { phone: { $regex: digitsOnly + "$", $options: "i" } },
+        ],
+      };
+    }
+
+    // Find user with password selected
+    const user = await User.findOne(query).select("+password");
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "Your Email/Phone or Password is incorrect. Please try again!",
+      });
+    }
+
+    // Verify password
+    const isMatch = await user.matchPassword(password);
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message: "Your Email/Phone or Password is incorrect. Please try again!",
+      });
+    }
+
+    // Generate JWT Token
+    const token = user.generateAuthToken();
+
+    res.status(200).json({
+      success: true,
+      message: "Login successful",
+      token,
+      user,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Send OTP to user's email
+ * @route   POST /api/auth/send-otp
+ * @access  Public
+ */
+const sendOtp = async (req, res, next) => {
+  try {
+    const { email, type = "signup", name } = req.body;
+
+    if (!email || !email.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Email address is required",
+      });
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+
+    // If forgot_password, ensure user exists
+    let userName = name || "User";
+    if (type === "forgot_password") {
+      const user = await User.findOne({ email: cleanEmail });
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "No account found with this email address.",
+        });
+      }
+      userName = user.fullName || "User";
+    }
+
+    // Generate 5-digit OTP
+    const otp = generateOtp();
+
+    // Remove any existing active OTP for this email and type
+    await Otp.deleteMany({ email: cleanEmail, type });
+
+    // Store new OTP document (expires in 10 minutes)
+    await Otp.create({
+      email: cleanEmail,
+      otp,
+      type,
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+    });
+
+    // Send email via Nodemailer
+    await sendOtpEmail({
+      to: cleanEmail,
+      otp,
+      type,
+      name: userName,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Verification code sent to ${cleanEmail}`,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Resend OTP to user's email
+ * @route   POST /api/auth/resend-otp
+ * @access  Public
+ */
+const resendOtp = async (req, res, next) => {
+  try {
+    const { email, type = "resend" } = req.body;
+
+    if (!email || !email.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Email address is required",
+      });
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+
+    // Look for user to personalize email
+    const user = await User.findOne({ email: cleanEmail });
+    const userName = user ? user.fullName : "User";
+
+    // Generate 5-digit OTP
+    const otp = generateOtp();
+
+    // Replace previous OTPs
+    await Otp.deleteMany({ email: cleanEmail });
+
+    // Store new OTP
+    await Otp.create({
+      email: cleanEmail,
+      otp,
+      type,
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+    });
+
+    // Send email via Nodemailer
+    await sendOtpEmail({
+      to: cleanEmail,
+      otp,
+      type: "resend",
+      name: userName,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `A new verification code has been sent to ${cleanEmail}`,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Verify OTP
+ * @route   POST /api/auth/verify-otp
+ * @access  Public
+ */
+const verifyOtp = async (req, res, next) => {
+  try {
+    const { email, otp } = req.body;
+
+    if (!email || !otp) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and OTP code are required",
+      });
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+    const cleanOtp = String(otp).trim();
+
+    // Find the latest valid OTP document
+    const record = await Otp.findOne({
+      email: cleanEmail,
+      otp: cleanOtp,
+      expiresAt: { $gt: new Date() },
+    });
+
+    if (!record) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or expired verification code. Please request a new one.",
+      });
+    }
+
+    // Mark user as verified if they exist
+    const user = await User.findOneAndUpdate(
+      { email: cleanEmail },
+      { isVerified: true },
+      { new: true }
+    );
+
+    let token = null;
+    if (user) {
+      token = user.generateAuthToken();
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Verification successful!",
+      token,
+      user,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Forgot Password - Send Reset OTP
+ * @route   POST /api/auth/forgot-password
+ * @access  Public
+ */
+const forgotPassword = async (req, res, next) => {
+  try {
+    const { identifier } = req.body;
+
+    if (!identifier || !identifier.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Please enter your email or phone number",
+      });
+    }
+
+    const cleanId = identifier.trim();
+    const isEmail = cleanId.includes("@");
+
+    let query;
+    if (isEmail) {
+      query = { email: cleanId.toLowerCase() };
+    } else {
+      const digitsOnly = cleanId.replace(/\D/g, "");
+      query = {
+        $or: [
+          { phone: cleanId },
+          { phone: { $regex: digitsOnly + "$", $options: "i" } },
+        ],
+      };
+    }
+
+    const user = await User.findOne(query);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "No account found matching this email or phone number.",
+      });
+    }
+
+    // Generate 5-digit OTP
+    const otp = generateOtp();
+
+    // Replace previous OTPs for this email
+    await Otp.deleteMany({ email: user.email });
+
+    // Store new OTP
+    await Otp.create({
+      email: user.email,
+      otp,
+      type: "forgot_password",
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+    });
+
+    // Send email with Nodemailer
+    await sendOtpEmail({
+      to: user.email,
+      otp,
+      type: "forgot_password",
+      name: user.fullName || "User",
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Password reset code sent to ${user.email}`,
+      email: user.email,
+      phone: user.phone,
+      name: user.fullName,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Reset Password with OTP
+ * @route   POST /api/auth/reset-password
+ * @access  Public
+ */
+const resetPassword = async (req, res, next) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+
+    if (!email || !otp || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Email, OTP code, and new password are required.",
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: "New password must be at least 6 characters long.",
+      });
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+    const cleanOtp = String(otp).trim();
+
+    // Verify OTP
+    const record = await Otp.findOne({
+      email: cleanEmail,
+      otp: cleanOtp,
+      expiresAt: { $gt: new Date() },
+    });
+
+    if (!record) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or expired verification code.",
+      });
+    }
+
+    // Find User
+    const user = await User.findOne({ email: cleanEmail }).select("+password");
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found.",
+      });
+    }
+
+    // Update password
+    user.password = newPassword;
+    await user.save();
+
+    // Remove the OTP after successful use
+    await Otp.deleteMany({ email: cleanEmail });
+
+    res.status(200).json({
+      success: true,
+      message: "Password changed successfully! You can now log in.",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Get current authenticated user profile
+ * @route   GET /api/auth/me
+ * @access  Private
+ */
+const getMe = async (req, res) => {
+  res.status(200).json({
+    success: true,
+    user: req.user,
+  });
+};
+
+/**
+ * @desc    Upload profile avatar image to Cloudinary and update MongoDB
+ * @route   POST /api/auth/upload-avatar or PUT /api/auth/avatar
+ * @access  Public / Private
+ */
+const uploadAvatar = async (req, res, next) => {
+  try {
+    let fileSource = null;
+
+    if (req.file && req.file.buffer) {
+      fileSource = req.file.buffer;
+    } else if (req.body.image || req.body.avatar) {
+      fileSource = req.body.image || req.body.avatar;
+    }
+
+    if (!fileSource) {
+      return res.status(400).json({
+        success: false,
+        message: "No image file or base64 data provided in request.",
+      });
+    }
+
+    // Upload image to Cloudinary
+    const uploadRes = await uploadAvatarToCloudinary(fileSource);
+
+    let updatedUser = null;
+    // If authenticated via Bearer token, automatically update MongoDB user
+    if (req.user && req.user._id) {
+      updatedUser = await User.findByIdAndUpdate(
+        req.user._id,
+        { avatar: uploadRes.url },
+        { new: true, runValidators: true }
+      );
+    } else if (req.body.userId || req.body.email) {
+      const query = req.body.userId
+        ? { _id: req.body.userId }
+        : { email: req.body.email.toLowerCase() };
+      updatedUser = await User.findOneAndUpdate(
+        query,
+        { avatar: uploadRes.url },
+        { new: true, runValidators: true }
+      );
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Avatar uploaded to Cloudinary and saved to MongoDB successfully",
+      avatarUrl: uploadRes.url,
+      publicId: uploadRes.publicId,
+      user: updatedUser,
+    });
+  } catch (error) {
+    if (error.message && error.message.includes('actions=["create"]')) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Cloudinary Access Key lacks 'create' (Upload) permissions. Please enable Write/Create permissions for key 178442332451356 in Cloudinary Console (Settings > Access Keys).",
+      });
+    }
+    next(error);
+  }
+};
+
+/**
+ * @desc    Update user profile data in MongoDB
+ * @route   PUT /api/auth/profile
+ * @access  Private
+ */
+const updateProfile = async (req, res, next) => {
+  try {
+    const { fullName, phone, dob, gender, avatar } = req.body;
+    const updateData = {};
+
+    if (fullName) updateData.fullName = fullName.trim();
+    if (phone) updateData.phone = phone.trim();
+    if (dob) updateData.dob = dob.trim();
+    if (gender) updateData.gender = gender;
+    if (avatar) updateData.avatar = avatar.trim();
+
+    const user = await User.findByIdAndUpdate(req.user._id, updateData, {
+      new: true,
+      runValidators: true,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Profile updated successfully in MongoDB",
+      user,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Log out user / clear session
+ * @route   POST /api/auth/logout
+ * @access  Public / Private
+ */
+const logout = async (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "Logged out successfully",
+  });
+};
+
+module.exports = {
+  signup,
+  login,
+  sendOtp,
+  resendOtp,
+  verifyOtp,
+  forgotPassword,
+  resetPassword,
+  getMe,
+  uploadAvatar,
+  updateProfile,
+  logout,
+};
