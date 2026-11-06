@@ -1,6 +1,7 @@
+import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Linking,
   Platform,
   StyleSheet,
@@ -8,8 +9,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { Image } from "expo-image";
 
 // Safe dynamic check for react-native-maps so top-level evaluation NEVER crashes
 // when running in Expo Go or clients without RNMapsAirModule compiled in native binary.
@@ -140,7 +139,7 @@ export const BranchMapView: React.FC<BranchMapViewProps> = ({
         latitude: 27.6915,
         longitude: 85.342,
       },
-    [userLocation]
+    [userLocation],
   );
 
   // Calculate Distance (Haversine formula) in kilometers
@@ -148,7 +147,7 @@ export const BranchMapView: React.FC<BranchMapViewProps> = ({
     lat1: number,
     lon1: number,
     lat2: number,
-    lon2: number
+    lon2: number,
   ): number => {
     const R = 6371;
     const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -168,7 +167,7 @@ export const BranchMapView: React.FC<BranchMapViewProps> = ({
         effectiveUserLoc.latitude,
         effectiveUserLoc.longitude,
         activeClinic.latitude,
-        activeClinic.longitude
+        activeClinic.longitude,
       )
     : 1.2;
 
@@ -228,14 +227,14 @@ export const BranchMapView: React.FC<BranchMapViewProps> = ({
           longitude: (effectiveUserLoc.longitude + activeClinic.longitude) / 2,
           latitudeDelta: Math.max(
             0.03,
-            Math.abs(effectiveUserLoc.latitude - activeClinic.latitude) * 1.8
+            Math.abs(effectiveUserLoc.latitude - activeClinic.latitude) * 1.8,
           ),
           longitudeDelta: Math.max(
             0.03,
-            Math.abs(effectiveUserLoc.longitude - activeClinic.longitude) * 1.8
+            Math.abs(effectiveUserLoc.longitude - activeClinic.longitude) * 1.8,
           ),
         },
-        700
+        700,
       );
     }
   }, [selectedClinicId, effectiveUserLoc, mapReady, activeClinic]);
@@ -257,7 +256,7 @@ export const BranchMapView: React.FC<BranchMapViewProps> = ({
         {
           edgePadding: { top: 70, right: 60, bottom: 70, left: 60 },
           animated: true,
-        }
+        },
       );
     }
   };
@@ -379,27 +378,6 @@ export const BranchMapView: React.FC<BranchMapViewProps> = ({
 
   return (
     <View style={styles.cardContainer}>
-      {/* Top Header Bar */}
-      <View style={styles.mapHeaderBar}>
-        <View style={styles.branchStatusBadge}>
-          <View style={styles.livePulseDot} />
-          <Text style={styles.branchStatusText} numberOfLines={1}>
-            {activeClinic
-              ? `${activeClinic.branch || activeClinic.name}`
-              : "Branch Route"}
-          </Text>
-        </View>
-
-        <TouchableOpacity
-          style={styles.recenterButton}
-          activeOpacity={0.7}
-          onPress={handleRecenter}
-        >
-          <Ionicons name="scan" size={12} color="#00E5FF" />
-          <Text style={styles.recenterButtonText}>Fit Route</Text>
-        </TouchableOpacity>
-      </View>
-
       {/* Map Viewport: Uses Native MapView if available; otherwise uses high-res Google Maps Static Route View */}
       <View style={styles.mapViewport}>
         {isNativeMapsAvailable && MapViewComponent ? (
@@ -538,7 +516,8 @@ export const BranchMapView: React.FC<BranchMapViewProps> = ({
             <View style={styles.staticRoutePill}>
               <View style={styles.staticRoutePillDot} />
               <Text style={styles.staticRoutePillText}>
-                Route to {activeClinic?.branch || activeClinic?.name || "Branch"}
+                Route to{" "}
+                {activeClinic?.branch || activeClinic?.name || "Branch"}
               </Text>
               <Text style={styles.staticRoutePillKm}>
                 • {directDistance} km
@@ -574,58 +553,6 @@ export const BranchMapView: React.FC<BranchMapViewProps> = ({
           </View>
         )}
       </View>
-
-      {/* Selected Branch Route Details & Action Bottom Bar */}
-      {activeClinic && (
-        <View style={styles.directionFooter}>
-          <View style={styles.directionInfoRow}>
-            <View style={styles.routeIconWrapper}>
-              <Ionicons name="navigate" size={16} color="#00E5FF" />
-            </View>
-
-            <View style={styles.routeDetails}>
-              <View style={styles.destinationTitleRow}>
-                <Text style={styles.destinationClinicName} numberOfLines={1}>
-                  {activeClinic.name}
-                </Text>
-                <View style={styles.activeTag}>
-                  <Text style={styles.activeTagText}>SELECTED</Text>
-                </View>
-              </View>
-
-              <Text style={styles.destinationDistanceText}>
-                {directDistance} km • ~{estimatedMins} mins direct drive
-              </Text>
-              <Text style={styles.destinationAddressText} numberOfLines={1}>
-                {activeClinic.address || "Kathmandu Valley, Nepal"} •{" "}
-                {activeClinic.timing || "Open: 9 AM - 6 PM"}
-              </Text>
-            </View>
-          </View>
-
-          {/* Action Buttons: Navigate in Google Maps / Call Branch */}
-          <View style={styles.actionButtonsRow}>
-            <TouchableOpacity
-              style={styles.directionsPrimaryButton}
-              activeOpacity={0.8}
-              onPress={handleGetDirections}
-            >
-              <Ionicons name="arrow-redo" size={15} color="#FFFFFF" />
-              <Text style={styles.directionsPrimaryButtonText}>
-                Start Turn-by-Turn Route
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.callClinicButton}
-              activeOpacity={0.8}
-              onPress={handleCallClinic}
-            >
-              <Ionicons name="call" size={15} color="#00E5FF" />
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
     </View>
   );
 };

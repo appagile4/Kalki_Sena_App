@@ -1,22 +1,22 @@
-import React, { useState } from "react";
-import {
-  StyleSheet,
-  Text,
-  View,
-  TouchableOpacity,
-  ScrollView,
-  TextInput,
-  Modal,
-  Alert,
-  Share,
-} from "react-native";
-import { useRouter } from "expo-router";
-import { StatusBar } from "expo-status-bar";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { Image } from "expo-image";
-import { BranchMapView, BranchClinic } from "../../components/BranchMapView";
+import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import React, { useState } from "react";
+import {
+  Alert,
+  Modal,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { BranchClinic, BranchMapView } from "../../components/BranchMapView";
 import { apiService } from "../../services/api";
 
 type TabType = "About" | "Chapters" | "Reviews";
@@ -37,7 +37,8 @@ export default function BookDetailsScreen() {
   // Modals & Navigation steps
   const [currentStep, setCurrentStep] = useState<ScreenStep>("details");
   const [showCoverModal, setShowCoverModal] = useState<boolean>(false);
-  const [showAppearanceModal, setShowAppearanceModal] = useState<boolean>(false);
+  const [showAppearanceModal, setShowAppearanceModal] =
+    useState<boolean>(false);
   const [showSuccessModal, setShowSuccessModal] = useState<boolean>(false);
 
   // Selections
@@ -73,8 +74,12 @@ export default function BookDetailsScreen() {
         } catch {
           // Native module not registered
         }
-        if (LocationModule && LocationModule.requestForegroundPermissionsAsync) {
-          const { status } = await LocationModule.requestForegroundPermissionsAsync();
+        if (
+          LocationModule &&
+          LocationModule.requestForegroundPermissionsAsync
+        ) {
+          const { status } =
+            await LocationModule.requestForegroundPermissionsAsync();
           if (status === "granted" && isMounted) {
             const pos = await LocationModule.getCurrentPositionAsync({
               accuracy: LocationModule.Accuracy?.Balanced,
@@ -145,7 +150,7 @@ export default function BookDetailsScreen() {
   const handleCartPress = () => {
     Alert.alert(
       "Cart",
-      `Your cart has 1 book: ${bookData?.title || "Economic Revolution"} (${bookData?.currency || "NPR"} ${bookData?.price ? bookData.price.toLocaleString() : "1,000"}/-)`
+      `Your cart has 1 book: ${bookData?.title || "Economic Revolution"} (${bookData?.currency || "NPR"} ${bookData?.price ? bookData.price.toLocaleString() : "1,000"}/-)`,
     );
   };
 
@@ -184,7 +189,9 @@ export default function BookDetailsScreen() {
         bookAppearance,
         pickupLocation:
           bookAppearance === "physical"
-            ? clinicMap[selectedPickup] || selectedPickup || "Kalki Clinic - Baneshwor Branch"
+            ? clinicMap[selectedPickup] ||
+              selectedPickup ||
+              "Kalki Clinic - Baneshwor Branch"
             : "Digital In-App Access",
         paymentMethod,
         bankDetails:
@@ -294,7 +301,8 @@ export default function BookDetailsScreen() {
       );
     });
 
-    const displayClinics = filteredClinics.length > 0 ? filteredClinics : rawClinics;
+    const displayClinics =
+      filteredClinics.length > 0 ? filteredClinics : rawClinics;
 
     return (
       <View style={styles.container}>
@@ -360,8 +368,12 @@ export default function BookDetailsScreen() {
 
           {/* Clinic List Options Header */}
           <View style={styles.clinicListHeader}>
-            <Text style={styles.clinicListTitle}>Kalki Sena Pickup Branches ({displayClinics.length})</Text>
-            <Text style={styles.clinicListSubtitle}>Tap any branch to preview route</Text>
+            <Text style={styles.clinicListTitle}>
+              Kalki Sena Pickup Branches ({displayClinics.length})
+            </Text>
+            <Text style={styles.clinicListSubtitle}>
+              Tap any branch to preview route
+            </Text>
           </View>
 
           {/* Clinic List Options */}
@@ -377,7 +389,12 @@ export default function BookDetailsScreen() {
                 activeOpacity={0.8}
                 onPress={() => setSelectedPickup(clinic.id)}
               >
-                <View style={[styles.clinicIconBox, isSelected && styles.clinicIconBoxSelected]}>
+                <View
+                  style={[
+                    styles.clinicIconBox,
+                    isSelected && styles.clinicIconBoxSelected,
+                  ]}
+                >
                   <Ionicons
                     name="business"
                     size={18}
@@ -385,11 +402,17 @@ export default function BookDetailsScreen() {
                   />
                 </View>
                 <View style={styles.clinicInfo}>
-                  <Text style={[styles.clinicName, isSelected && styles.clinicNameSelected]}>
+                  <Text
+                    style={[
+                      styles.clinicName,
+                      isSelected && styles.clinicNameSelected,
+                    ]}
+                  >
                     {clinic.name}
                   </Text>
                   <Text style={styles.clinicDetails}>
-                    {clinic.distance || "1.2 Km away"} • {clinic.timing || "9 AM - 6 PM"}
+                    {clinic.distance || "1.2 Km away"} •{" "}
+                    {clinic.timing || "9 AM - 6 PM"}
                   </Text>
                   {clinic.address && (
                     <Text style={styles.clinicAddressSmall} numberOfLines={1}>
@@ -400,14 +423,14 @@ export default function BookDetailsScreen() {
 
                 {isSelected ? (
                   <View style={styles.selectedBadge}>
-                    <Ionicons name="radio-button-on" size={22} color="#00E5FF" />
+                    <Ionicons
+                      name="radio-button-on"
+                      size={22}
+                      color="#00E5FF"
+                    />
                   </View>
                 ) : (
-                  <Ionicons
-                    name="radio-button-off"
-                    size={20}
-                    color="#4A5D72"
-                  />
+                  <Ionicons name="radio-button-off" size={20} color="#4A5D72" />
                 )}
               </TouchableOpacity>
             );
@@ -522,7 +545,9 @@ export default function BookDetailsScreen() {
 
           <TouchableOpacity
             style={styles.secondaryLinkButton}
-            onPress={() => Alert.alert("Saved", "Bank details saved for future.")}
+            onPress={() =>
+              Alert.alert("Saved", "Bank details saved for future.")
+            }
           >
             <Text style={styles.secondaryLinkText}>Save Details</Text>
           </TouchableOpacity>
@@ -582,10 +607,14 @@ export default function BookDetailsScreen() {
             />
             <View style={styles.orderSummaryTextCol}>
               <Text style={styles.orderBookTitle}>
-                {bookData?.title || "Economic Revolution to make Nepal A World Leader"}
+                {bookData?.title ||
+                  "Economic Revolution to make Nepal A World Leader"}
               </Text>
               <Text style={styles.orderBookAuthor}>
-                by {bookData?.coAuthor || bookData?.author || "Dr. Uma Shankar Prasad (Economist, T.V.)"}
+                by{" "}
+                {bookData?.coAuthor ||
+                  bookData?.author ||
+                  "Dr. Uma Shankar Prasad (Economist, T.V.)"}
               </Text>
               <Text style={styles.orderDeliveryNote}>
                 {bookAppearance === "physical"
@@ -597,7 +626,9 @@ export default function BookDetailsScreen() {
 
           {/* Select Payment Method Header */}
           <View style={styles.paymentSectionHeader}>
-            <Text style={styles.paymentSectionTitle}>Select Payment Method</Text>
+            <Text style={styles.paymentSectionTitle}>
+              Select Payment Method
+            </Text>
             <TouchableOpacity onPress={() => setCurrentStep("details")}>
               <Ionicons name="close" size={20} color="#7A8D9E" />
             </TouchableOpacity>
@@ -666,9 +697,7 @@ export default function BookDetailsScreen() {
             <Text style={styles.paymentOptionName}>QR Code</Text>
             <Ionicons
               name={
-                paymentMethod === "qr"
-                  ? "radio-button-on"
-                  : "radio-button-off"
+                paymentMethod === "qr" ? "radio-button-on" : "radio-button-off"
               }
               size={20}
               color={paymentMethod === "qr" ? "#3087E5" : "#4A5D72"}
@@ -850,18 +879,21 @@ export default function BookDetailsScreen() {
 
           {isWhyExpanded && (
             <View style={styles.whyExpandedSection}>
-              {(bookData?.whyBuy?.points || [
-                "100% of book profit will be donated to the coaching center",
-                "1,000+ teachers will be employed to educate students for free",
-                "The goal is free healthcare, education, and legal services for life",
-                "After 10 lakh books are sold nationwide, within 30 days the Kalkiism Research and Training Center guarantees a central government that will implement economic policies to provide free health, education, and legal services to all 3 crore Nepalis.",
-              ]).map((point: string, idx: number) => (
+              {(
+                bookData?.whyBuy?.points || [
+                  "100% of book profit will be donated to the coaching center",
+                  "1,000+ teachers will be employed to educate students for free",
+                  "The goal is free healthcare, education, and legal services for life",
+                  "After 10 lakh books are sold nationwide, within 30 days the Kalkiism Research and Training Center guarantees a central government that will implement economic policies to provide free health, education, and legal services to all 3 crore Nepalis.",
+                ]
+              ).map((point: string, idx: number) => (
                 <Text key={idx} style={styles.whyExpandedItem}>
                   • {point}
                 </Text>
               ))}
               <Text style={styles.whyExpandedHighlight}>
-                {bookData?.whyBuy?.highlight || "One book. One movement. One future."}
+                {bookData?.whyBuy?.highlight ||
+                  "One book. One movement. One future."}
               </Text>
               <TouchableOpacity
                 onPress={() => setIsWhyExpanded(false)}
@@ -887,7 +919,8 @@ export default function BookDetailsScreen() {
           />
           <View style={styles.bookSummaryDetails}>
             <Text style={styles.bookSummaryTitle}>
-              {bookData?.title || "Economic Revolution to make Nepal A World Leader"}
+              {bookData?.title ||
+                "Economic Revolution to make Nepal A World Leader"}
             </Text>
             <Text style={styles.bookSummaryBlurb} numberOfLines={3}>
               {bookData?.aboutText ||
@@ -1044,7 +1077,9 @@ export default function BookDetailsScreen() {
                         </Text>
                       </View>
                     </View>
-                    <Text style={styles.reviewAuthor}>by {rev.reviewerName}</Text>
+                    <Text style={styles.reviewAuthor}>
+                      by {rev.reviewerName}
+                    </Text>
                     <Text style={styles.reviewBody}>{rev.comment}</Text>
                   </View>
                 </View>
@@ -1123,10 +1158,14 @@ export default function BookDetailsScreen() {
               />
               <View style={styles.appearanceTextCol}>
                 <Text style={styles.appearanceBookTitle}>
-                  {bookData?.title || "Economic Revolution to make Nepal A World Leader"}
+                  {bookData?.title ||
+                    "Economic Revolution to make Nepal A World Leader"}
                 </Text>
                 <Text style={styles.appearanceBookAuthor}>
-                  by {bookData?.coAuthor || bookData?.author || "Dr. Uma Shankar Prasad (Economist, T.V.)"}
+                  by{" "}
+                  {bookData?.coAuthor ||
+                    bookData?.author ||
+                    "Dr. Uma Shankar Prasad (Economist, T.V.)"}
                 </Text>
               </View>
             </View>
@@ -1150,7 +1189,9 @@ export default function BookDetailsScreen() {
                 size={22}
                 color={bookAppearance === "physical" ? "#3087E5" : "#8A9BA8"}
               />
-              <Text style={styles.appearanceOptionText}>Want Physical Book</Text>
+              <Text style={styles.appearanceOptionText}>
+                Want Physical Book
+              </Text>
             </TouchableOpacity>
 
             {/* Option 2: Digital E-Book */}
@@ -1168,7 +1209,9 @@ export default function BookDetailsScreen() {
                 size={22}
                 color={bookAppearance === "digital" ? "#3087E5" : "#8A9BA8"}
               />
-              <Text style={styles.appearanceOptionText}>Want Digital E-Book</Text>
+              <Text style={styles.appearanceOptionText}>
+                Want Digital E-Book
+              </Text>
             </TouchableOpacity>
 
             {/* Continue Button */}
@@ -1208,7 +1251,8 @@ export default function BookDetailsScreen() {
             />
 
             <Text style={styles.largeCoverTitle}>
-              {bookData?.title || "Economic Revolution to make Nepal A World Leader"}
+              {bookData?.title ||
+                "Economic Revolution to make Nepal A World Leader"}
             </Text>
 
             <View style={styles.coverAuthorRow}>
@@ -1795,11 +1839,6 @@ const styles = StyleSheet.create({
   clinicOptionSelected: {
     borderColor: "#00E5FF",
     backgroundColor: "#082548",
-    shadowColor: "#00E5FF",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 3,
   },
   clinicIconBox: {
     width: 36,
