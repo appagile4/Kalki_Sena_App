@@ -30,6 +30,7 @@ export interface ApiResponse<T = any> {
   name?: string;
   avatarUrl?: string;
   publicId?: string;
+  hasApplication?: boolean;
   errors?: Array<{ field: string; message: string }>;
 }
 
@@ -439,6 +440,66 @@ export const apiService = {
       return await response.json();
     } catch (error: any) {
       throw new Error(error.message || "Failed to fetch promo video");
+    }
+  },
+
+  // Driver KYC & Registration
+  submitDriverApplication: async (payload: any, token?: string | null): Promise<ApiResponse> => {
+    try {
+      const headers = await getAuthHeaders(token);
+      const response = await fetch(`${API_BASE_URL}/driver/apply`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to submit driver application");
+      }
+      return data;
+    } catch (error: any) {
+      throw new Error(error.message || "Network error submitting driver application");
+    }
+  },
+
+  getDriverStatus: async (email?: string, token?: string | null): Promise<ApiResponse> => {
+    try {
+      const headers = await getAuthHeaders(token);
+      const query = email ? `?email=${encodeURIComponent(email)}` : "";
+      const response = await fetch(`${API_BASE_URL}/driver/my-status${query}`, {
+        method: "GET",
+        headers,
+      });
+      return await response.json();
+    } catch (error: any) {
+      throw new Error(error.message || "Network error fetching driver application status");
+    }
+  },
+
+  uploadDriverDocument: async (
+    imageBase64: string,
+    applicantName: string,
+    docType: string,
+    token?: string | null
+  ): Promise<{ success: boolean; url: string; publicId: string; message?: string }> => {
+    try {
+      const headers = await getAuthHeaders(token);
+      const response = await fetch(`${API_BASE_URL}/driver/upload-document`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          image: imageBase64,
+          applicantName,
+          docType,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to upload document to Cloudinary");
+      }
+      return data;
+    } catch (error: any) {
+      throw new Error(error.message || "Network error uploading document to Cloudinary");
     }
   },
 };
