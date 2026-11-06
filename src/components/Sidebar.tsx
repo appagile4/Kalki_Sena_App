@@ -244,19 +244,7 @@ export default function Sidebar({
           </button>
         </div>
 
-        {/* Live System Indicator */}
-        {!collapsed && (
-          <div className="px-4 py-2 mx-3 my-2 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between text-[11px] font-mono">
-            <div className="flex items-center gap-1.5 text-emerald-600 font-semibold">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-              </span>
-              <span>SYSTEM ONLINE</span>
-            </div>
-            <span className="text-slate-400 text-[10px]">ROOT LEVEL 5</span>
-          </div>
-        )}
+
 
         {/* Scrollable Navigation Menu */}
         <div className="flex-1 overflow-y-auto px-3 py-3 space-y-6">

@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import Sidebar from "../../components/Sidebar";
 import BookManagement from "../../components/BookManagement";
 import VideoManagement from "../../components/VideoManagement";
+import DriverKycManagement from "../../components/DriverKycManagement";
 import {
   Users,
   Car,
@@ -130,11 +131,7 @@ export default function SuperadminDashboardPage() {
               />
             </div>
 
-            {/* Live Indicator */}
-            <div className="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-mono">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>Port 5000 Online</span>
-            </div>
+
 
             {/* Notifications */}
             <button
@@ -427,79 +424,9 @@ export default function SuperadminDashboardPage() {
             </>
           )}
 
-          {/* Drivers Tab */}
-          {activeTab === "drivers" && (
-            <div className="space-y-6">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-                <div>
-                  <h2 className="text-xl font-bold text-slate-800">
-                    Driver Partners Fleet
-                  </h2>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Manage active drivers, verify vehicles, check online status and trip logs.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-200 text-xs font-semibold">
-                    86 Drivers Online
-                  </span>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs text-slate-600">
-                    <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-100 uppercase text-[10px] tracking-wider">
-                      <tr>
-                        <th className="py-3 px-4">Driver Name</th>
-                        <th className="py-3 px-4">Phone</th>
-                        <th className="py-3 px-4">Vehicle Type</th>
-                        <th className="py-3 px-4">Status</th>
-                        <th className="py-3 px-4">Rating</th>
-                        <th className="py-3 px-4 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {[
-                        { name: "Rajesh Kumar", phone: "+91 98765 43210", vehicle: "Sedan (DL 01 AB 1234)", status: "On Trip", rating: "4.9" },
-                        { name: "Amit Sharma", phone: "+91 98111 22334", vehicle: "SUV (HR 26 DQ 5678)", status: "Online", rating: "4.8" },
-                        { name: "Vikas Yadav", phone: "+91 99555 66778", vehicle: "Auto (UP 16 Z 9901)", status: "Online", rating: "4.7" },
-                        { name: "Pooja Verma", phone: "+91 97777 88990", vehicle: "Hatchback (DL 04 CD 3456)", status: "Offline", rating: "4.95" },
-                      ].map((driver, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50/50 transition">
-                          <td className="py-3.5 px-4 font-semibold text-slate-800">
-                            {driver.name}
-                          </td>
-                          <td className="py-3.5 px-4 font-mono">{driver.phone}</td>
-                          <td className="py-3.5 px-4">{driver.vehicle}</td>
-                          <td className="py-3.5 px-4">
-                            <span
-                              className={`px-2 py-0.5 rounded-md text-[10px] font-semibold ${
-                                driver.status === "On Trip"
-                                  ? "bg-blue-50 text-blue-600"
-                                  : driver.status === "Online"
-                                  ? "bg-emerald-50 text-emerald-600"
-                                  : "bg-slate-100 text-slate-500"
-                              }`}
-                            >
-                              {driver.status}
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-4 font-semibold text-amber-500">
-                            ★ {driver.rating}
-                          </td>
-                          <td className="py-3.5 px-4 text-right">
-                            <button className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-[#0266b3] hover:text-white text-slate-700 transition cursor-pointer text-xs font-medium">
-                              Inspect
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
+          {/* Drivers & KYC Approvals Tab */}
+          {(activeTab === "drivers" || activeTab === "kyc") && (
+            <DriverKycManagement />
           )}
 
           {/* Book Management Tab */}
@@ -509,7 +436,11 @@ export default function SuperadminDashboardPage() {
           {activeTab === "video" && <VideoManagement />}
 
           {/* Fallback for other tabs */}
-          {activeTab !== "overview" && activeTab !== "drivers" && activeTab !== "book" && activeTab !== "video" && (
+          {activeTab !== "overview" &&
+            activeTab !== "drivers" &&
+            activeTab !== "kyc" &&
+            activeTab !== "book" &&
+            activeTab !== "video" && (
             <div className="bg-white rounded-2xl p-8 border border-slate-100 shadow-sm text-center py-16">
               <div className="w-14 h-14 rounded-2xl bg-blue-50 text-[#0266b3] mx-auto flex items-center justify-center mb-4">
                 <ShieldCheck className="w-7 h-7" />

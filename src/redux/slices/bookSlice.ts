@@ -22,11 +22,14 @@ export interface BookReview {
 
 export interface PickupClinic {
   id: string;
+  _id?: string;
   name: string;
   branch?: string;
   distance?: string;
   timing?: string;
   address?: string;
+  phone?: string;
+  city?: string;
   latitude?: number;
   longitude?: number;
 }
@@ -303,6 +306,91 @@ export const uploadBookCoverImage = createAsyncThunk(
   }
 );
 
+export const addPickupClinic = createAsyncThunk(
+  "book/addPickupClinic",
+  async (clinicData: Partial<PickupClinic>, { rejectWithValue, dispatch }) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/books/clinics`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(clinicData),
+      });
+      const data = await response.json();
+      if (!data.success) {
+        return rejectWithValue(data.message || "Failed to add clinic branch");
+      }
+      dispatch(fetchBooks());
+      return data.data as PickupClinic[];
+    } catch (err: any) {
+      return rejectWithValue(err.message || "Network error adding clinic");
+    }
+  }
+);
+
+export const deletePickupClinic = createAsyncThunk(
+  "book/deletePickupClinic",
+  async (clinicId: string, { rejectWithValue, dispatch }) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/books/clinics/${clinicId}`, {
+        method: "DELETE",
+      });
+      const data = await response.json();
+      if (!data.success) {
+        return rejectWithValue(data.message || "Failed to delete clinic branch");
+      }
+      dispatch(fetchBooks());
+      return data.data as PickupClinic[];
+    } catch (err: any) {
+      return rejectWithValue(err.message || "Network error deleting clinic");
+    }
+  }
+);
+
+export const updateSinglePickupClinic = createAsyncThunk(
+  "book/updateSinglePickupClinic",
+  async (
+    { clinicId, updates }: { clinicId: string; updates: Partial<PickupClinic> },
+    { rejectWithValue, dispatch }
+  ) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/books/clinics/${clinicId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+      const data = await response.json();
+      if (!data.success) {
+        return rejectWithValue(data.message || "Failed to update clinic branch");
+      }
+      dispatch(fetchBooks());
+      return data.data as PickupClinic[];
+    } catch (err: any) {
+      return rejectWithValue(err.message || "Network error updating clinic");
+    }
+  }
+);
+
+export const updatePickupClinics = createAsyncThunk(
+  "book/updatePickupClinics",
+  async (clinics: PickupClinic[], { rejectWithValue, dispatch }) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/books/clinics`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clinics }),
+      });
+      const data = await response.json();
+      if (!data.success) {
+        return rejectWithValue(data.message || "Failed to update clinics list");
+      }
+      dispatch(fetchBooks());
+      return data.data as PickupClinic[];
+    } catch (err: any) {
+      return rejectWithValue(err.message || "Network error updating clinics");
+    }
+  }
+);
+
 export const bookSlice = createSlice({
   name: "book",
   initialState,
@@ -392,6 +480,69 @@ export const bookSlice = createSlice({
       .addCase(uploadBookCoverImage.rejected, (state, action) => {
         state.uploadingImage = false;
         state.error = (action.payload as string) || "Failed to upload image";
+      });
+
+    // Pickup Clinics CRUD
+    builder
+      .addCase(addPickupClinic.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(addPickupClinic.fulfilled, (state, action) => {
+        state.loading = false;
+        if (state.activeBook) {
+          state.activeBook.pickupClinics = action.payload;
+        }
+        state.successMessage = "Pickup clinic branch added successfully!";
+      })
+      .addCase(addPickupClinic.rejected, (state, action) => {
+        state.loading = false;
+        state.error = (action.payload as string) || "Failed to add clinic branch";
+      })
+      .addCase(deletePickupClinic.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(deletePickupClinic.fulfilled, (state, action) => {
+        state.loading = false;
+        if (state.activeBook) {
+          state.activeBook.pickupClinics = action.payload;
+        }
+        state.successMessage = "Pickup clinic branch removed successfully!";
+      })
+      .addCase(deletePickupClinic.rejected, (state, action) => {
+        state.loading = false;
+        state.error = (action.payload as string) || "Failed to delete clinic branch";
+      })
+      .addCase(updateSinglePickupClinic.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(updateSinglePickupClinic.fulfilled, (state, action) => {
+        state.loading = false;
+        if (state.activeBook) {
+          state.activeBook.pickupClinics = action.payload;
+        }
+        state.successMessage = "Pickup clinic branch updated successfully!";
+      })
+      .addCase(updateSinglePickupClinic.rejected, (state, action) => {
+        state.loading = false;
+        state.error = (action.payload as string) || "Failed to update clinic branch";
+      })
+      .addCase(updatePickupClinics.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(updatePickupClinics.fulfilled, (state, action) => {
+        state.loading = false;
+        if (state.activeBook) {
+          state.activeBook.pickupClinics = action.payload;
+        }
+        state.successMessage = "Pickup clinics list synchronized successfully!";
+      })
+      .addCase(updatePickupClinics.rejected, (state, action) => {
+        state.loading = false;
+        state.error = (action.payload as string) || "Failed to update clinics list";
       });
   },
 });

@@ -187,21 +187,6 @@ export default function VideoManagement() {
 
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2 max-w-2xl">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="px-3 py-1 rounded-full bg-blue-500/20 text-cyan-300 text-xs font-mono font-semibold border border-blue-400/30 flex items-center gap-1.5">
-                <Video className="w-3.5 h-3.5" />
-                <span>CLOUDINARY VIDEO CDN</span>
-              </span>
-              <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-mono font-semibold border border-emerald-400/30 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span>LIVE MOBILE APP SYNC</span>
-              </span>
-              <span className="px-3 py-1 rounded-full bg-purple-500/20 text-purple-200 text-xs font-mono font-semibold border border-purple-400/30 flex items-center gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>AUTO-DELETE PREVIOUS VIDEO: ENABLED</span>
-              </span>
-            </div>
-
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center gap-3">
               <span>Promotional Video & Broadcast Controller</span>
             </h1>

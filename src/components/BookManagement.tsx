@@ -11,8 +11,13 @@ import {
   updateOrderStatus,
   updateBookData,
   uploadBookCoverImage,
+  addPickupClinic,
+  deletePickupClinic,
+  updateSinglePickupClinic,
+  updatePickupClinics,
   clearMessages,
   BookChapter,
+  PickupClinic,
 } from "../redux/slices/bookSlice";
 import {
   BookOpen,
@@ -45,6 +50,9 @@ import {
   ImageIcon,
   Video,
   Play,
+  Phone,
+  Navigation,
+  X,
 } from "lucide-react";
 
 export default function BookManagement() {
@@ -197,6 +205,114 @@ export default function BookManagement() {
     const updated = [...chapters];
     updated[index] = { ...updated[index], [field]: value };
     setChapters(updated);
+  };
+
+  // Pickup Clinics State & Handlers
+  const [isClinicModalOpen, setIsClinicModalOpen] = useState(false);
+  const [editingClinic, setEditingClinic] = useState<PickupClinic | null>(null);
+  const [clinicFormData, setClinicFormData] = useState({
+    name: "",
+    branch: "",
+    distance: "1.2 Km away",
+    timing: "9 AM - 6 PM",
+    address: "",
+    phone: "+977-1-4782000",
+    city: "Kathmandu",
+    latitude: 27.6915,
+    longitude: 85.342,
+  });
+  const [isDeletingClinicId, setIsDeletingClinicId] = useState<string | null>(null);
+  const [isSavingClinic, setIsSavingClinic] = useState(false);
+
+  const handleOpenAddClinicModal = () => {
+    setEditingClinic(null);
+    setClinicFormData({
+      name: "",
+      branch: "",
+      distance: "1.0 Km away",
+      timing: "9 AM - 6 PM",
+      address: "",
+      phone: "+977-1-4782000",
+      city: "Kathmandu",
+      latitude: 27.6915,
+      longitude: 85.342,
+    });
+    setIsClinicModalOpen(true);
+  };
+
+  const handleOpenEditClinicModal = (clinic: PickupClinic) => {
+    setEditingClinic(clinic);
+    setClinicFormData({
+      name: clinic.name || "",
+      branch: clinic.branch || "",
+      distance: clinic.distance || "1.0 Km away",
+      timing: clinic.timing || "9 AM - 6 PM",
+      address: clinic.address || "",
+      phone: clinic.phone || "+977-1-4782000",
+      city: clinic.city || "Kathmandu",
+      latitude: clinic.latitude || 27.6915,
+      longitude: clinic.longitude || 85.342,
+    });
+    setIsClinicModalOpen(true);
+  };
+
+  const handleSaveClinic = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!clinicFormData.name.trim()) {
+      alert("Please enter a clinic / branch name");
+      return;
+    }
+    setIsSavingClinic(true);
+    try {
+      if (editingClinic) {
+        const clinicId = editingClinic.id || editingClinic._id;
+        if (clinicId) {
+          await dispatch(
+            updateSinglePickupClinic({
+              clinicId,
+              updates: {
+                ...clinicFormData,
+                latitude: Number(clinicFormData.latitude),
+                longitude: Number(clinicFormData.longitude),
+              },
+            })
+          ).unwrap();
+        }
+      } else {
+        await dispatch(
+          addPickupClinic({
+            ...clinicFormData,
+            latitude: Number(clinicFormData.latitude),
+            longitude: Number(clinicFormData.longitude),
+          })
+        ).unwrap();
+      }
+      setIsClinicModalOpen(false);
+      setEditingClinic(null);
+    } catch (err: any) {
+      alert(err || "Failed to save pickup clinic.");
+    } finally {
+      setIsSavingClinic(false);
+    }
+  };
+
+  const handleDeleteClinic = async (clinic: PickupClinic) => {
+    const clinicId = clinic.id || clinic._id;
+    if (!clinicId) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to remove "${clinic.name}" from authorized pickup clinics? Physical book buyers will no longer be able to select this branch.`
+    );
+    if (!confirmed) return;
+
+    setIsDeletingClinicId(clinicId);
+    try {
+      await dispatch(deletePickupClinic(clinicId)).unwrap();
+    } catch (err: any) {
+      alert(err || "Failed to remove clinic branch.");
+    } finally {
+      setIsDeletingClinicId(null);
+    }
   };
 
   // Handle Save Book Changes
@@ -868,6 +984,7 @@ export default function BookManagement() {
                   src="/avatar.png"
                   alt="Jay Sah Author"
                   fill
+                  sizes="48px"
                   className="object-cover"
                 />
               </div>
@@ -884,48 +1001,106 @@ export default function BookManagement() {
 
             {/* Pickup Clinics List */}
             <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm space-y-3">
-              <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
-                <MapPin className="w-4 h-4 text-[#0266b3]" />
-                <span>Kalki Sena Pickup Clinics</span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
+                  <MapPin className="w-4 h-4 text-[#0266b3]" />
+                  <span>Kalki Sena Pickup Clinics</span>
+                  <span className="px-1.5 py-0.5 rounded-full bg-blue-50 text-[#0266b3] text-[10px] font-bold">
+                    {currentBook?.pickupClinics?.length || 0}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleOpenAddClinicModal}
+                  className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#0266b3] text-[11px] font-bold flex items-center gap-1 transition cursor-pointer border border-blue-200/60"
+                  title="Add new authorized branch clinic"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>Add Branch</span>
+                </button>
               </div>
+
               <p className="text-[11px] text-slate-400">
                 Physical book buyers can collect from any authorized branch:
               </p>
 
               <div className="space-y-2.5 pt-1">
-                {currentBook?.pickupClinics?.map((clinic: any) => (
-                  <div
-                    key={clinic.id}
-                    className="p-3 rounded-xl bg-slate-50 border border-slate-100 flex items-start justify-between gap-2.5"
-                  >
-                    <div className="flex items-start gap-2.5 min-w-0">
-                      <MapPin className="w-4 h-4 text-[#0266b3] shrink-0 mt-0.5" />
-                      <div className="min-w-0">
-                        <p className="text-xs font-semibold text-slate-800 truncate">
-                          {clinic.name}
-                        </p>
-                        <p className="text-[10px] text-slate-400 font-mono">
-                          {clinic.distance || "1.2 Km away"} • {clinic.timing || "9 AM - 6 PM"}
-                        </p>
-                        {clinic.address && (
-                          <p className="text-[10px] text-slate-500 truncate mt-0.5">
-                            📍 {clinic.address}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    {clinic.latitude && clinic.longitude && (
-                      <a
-                        href={`https://www.google.com/maps?q=${clinic.latitude},${clinic.longitude}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-[10px] text-cyan-600 hover:underline shrink-0 font-mono"
-                      >
-                        Map ↗
-                      </a>
-                    )}
+                {!currentBook?.pickupClinics || currentBook.pickupClinics.length === 0 ? (
+                  <div className="p-5 rounded-xl border border-dashed border-slate-200 text-center text-xs text-slate-400 bg-slate-50 space-y-2">
+                    <p>No pickup clinic branches configured.</p>
+                    <button
+                      type="button"
+                      onClick={handleOpenAddClinicModal}
+                      className="px-3 py-1.5 rounded-lg bg-[#0266b3] text-white text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>Add First Clinic</span>
+                    </button>
                   </div>
-                ))}
+                ) : (
+                  currentBook.pickupClinics.map((clinic: any) => {
+                    const clinicId = clinic.id || clinic._id;
+                    const isDeleting = isDeletingClinicId === clinicId;
+                    return (
+                      <div
+                        key={clinicId || clinic.name}
+                        className="p-3 rounded-xl bg-slate-50 border border-slate-100 hover:border-slate-200 transition flex items-start justify-between gap-2.5 group"
+                      >
+                        <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                          <MapPin className="w-4 h-4 text-[#0266b3] shrink-0 mt-0.5" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-semibold text-slate-800 truncate">
+                              {clinic.name}
+                            </p>
+                            <p className="text-[10px] text-slate-400 font-mono">
+                              {clinic.distance || "1.2 Km away"} • {clinic.timing || "9 AM - 6 PM"}
+                            </p>
+                            {clinic.address && (
+                              <p className="text-[10px] text-slate-500 truncate mt-0.5">
+                                📍 {clinic.address}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0 pt-0.5">
+                          {clinic.latitude && clinic.longitude && (
+                            <a
+                              href={`https://www.google.com/maps?q=${clinic.latitude},${clinic.longitude}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-[10px] text-cyan-600 hover:underline font-mono px-1.5 py-0.5 rounded bg-cyan-50/60"
+                              title="View location on Google Maps"
+                            >
+                              Map ↗
+                            </a>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditClinicModal(clinic)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-[#0266b3] hover:bg-blue-50 transition cursor-pointer"
+                            title="Edit Branch"
+                          >
+                            <FileEdit className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isDeleting}
+                            onClick={() => handleDeleteClinic(clinic)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition cursor-pointer disabled:opacity-50"
+                            title="Remove Branch"
+                          >
+                            {isDeleting ? (
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin text-red-500" />
+                            ) : (
+                              <Trash2 className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
 
@@ -1362,6 +1537,98 @@ export default function BookManagement() {
               )}
             </div>
 
+            {/* Pickup Clinics Management Section */}
+            <div className="p-5 rounded-2xl bg-slate-50/80 border border-slate-200/80 space-y-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                <div>
+                  <span className="text-xs font-bold text-slate-800 flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-[#0266b3]" />
+                    <span>Authorized Pickup Clinics ({currentBook?.pickupClinics?.length || 0})</span>
+                  </span>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Physical book buyers can select any of these clinic branches during checkout.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleOpenAddClinicModal}
+                  className="px-3 py-1.5 rounded-xl bg-[#0266b3] hover:bg-[#02569b] text-white text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Clinic Branch</span>
+                </button>
+              </div>
+
+              {!currentBook?.pickupClinics || currentBook.pickupClinics.length === 0 ? (
+                <div className="p-6 text-center text-xs text-slate-400 bg-white rounded-xl border border-dashed border-slate-200">
+                  No pickup clinics added yet. Click &quot;Add Clinic Branch&quot; to create one.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {currentBook.pickupClinics.map((clinic: any) => {
+                    const clinicId = clinic.id || clinic._id;
+                    const isDeleting = isDeletingClinicId === clinicId;
+                    return (
+                      <div
+                        key={clinicId || clinic.name}
+                        className="p-4 rounded-xl bg-white border border-slate-200 shadow-xs flex flex-col justify-between gap-3"
+                      >
+                        <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-2.5">
+                          <div className="flex items-start gap-2 min-w-0">
+                            <MapPin className="w-4 h-4 text-[#0266b3] shrink-0 mt-0.5" />
+                            <div className="min-w-0">
+                              <h4 className="text-xs font-bold text-slate-800 truncate">
+                                {clinic.name}
+                              </h4>
+                              <p className="text-[10px] text-slate-400 font-mono">
+                                {clinic.distance || "1.0 Km away"} • {clinic.timing || "9 AM - 6 PM"}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditClinicModal(clinic)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-[#0266b3] hover:bg-blue-50 transition cursor-pointer"
+                              title="Edit Clinic Details"
+                            >
+                              <FileEdit className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isDeleting}
+                              onClick={() => handleDeleteClinic(clinic)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition cursor-pointer disabled:opacity-50"
+                              title="Delete Clinic Branch"
+                            >
+                              {isDeleting ? (
+                                <RefreshCw className="w-3.5 h-3.5 animate-spin text-red-500" />
+                              ) : (
+                                <Trash2 className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1 text-[11px] text-slate-600">
+                          {clinic.address && (
+                            <p className="truncate">
+                              <span className="font-semibold text-slate-700">Address:</span>{" "}
+                              {clinic.address}
+                            </p>
+                          )}
+                          <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
+                            <span>Phone: {clinic.phone || "+977-1-4782000"}</span>
+                            <span>City: {clinic.city || "Kathmandu"}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
             {/* Save Button */}
             <button
               type="submit"
@@ -1498,15 +1765,17 @@ export default function BookManagement() {
                   }
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 focus:outline-none focus:border-[#0266b3] cursor-pointer"
                 >
-                  <option value="Kalki Clinic - Baneshwor Branch">
-                    Kalki Clinic - Baneshwor Branch (1.2 Km)
-                  </option>
-                  <option value="Kalki Sena Clinic - Baneshwor Branch">
-                    Kalki Sena Clinic - Baneshwor Branch
-                  </option>
-                  <option value="Kalki Clinic - Maitighar Branch">
-                    Kalki Clinic - Maitighar Branch (2.5 Km)
-                  </option>
+                  {currentBook?.pickupClinics && currentBook.pickupClinics.length > 0 ? (
+                    currentBook.pickupClinics.map((clinic: any) => (
+                      <option key={clinic.id || clinic._id} value={clinic.name}>
+                        {clinic.name} ({clinic.distance || clinic.branch || "Authorized"})
+                      </option>
+                    ))
+                  ) : (
+                    <option value="Kalki Clinic - Baneshwor Branch">
+                      Kalki Clinic - Baneshwor Branch (1.2 Km)
+                    </option>
+                  )}
                 </select>
               </div>
             )}
@@ -1613,6 +1882,220 @@ export default function BookManagement() {
               )}
             </button>
           </form>
+        </div>
+      )}
+
+      {/* ---------------- ADD / EDIT CLINIC BRANCH MODAL ---------------- */}
+      {isClinicModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto animate-fadeIn"
+          onClick={() => setIsClinicModalOpen(false)}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-5 animate-scaleUp"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-blue-50 text-[#0266b3] flex items-center justify-center">
+                  <MapPin className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800">
+                    {editingClinic ? "Edit Pickup Clinic Branch" : "Add Authorized Pickup Clinic"}
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Synchronizes directly with physical book buyers in mobile app.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsClinicModalOpen(false)}
+                className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Form */}
+            <form onSubmit={handleSaveClinic} className="space-y-4">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                  Clinic Branch Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={clinicFormData.name}
+                  onChange={(e) =>
+                    setClinicFormData({ ...clinicFormData, name: e.target.value })
+                  }
+                  placeholder="e.g. Kalki Clinic - Baneshwor Branch"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 focus:outline-none focus:border-[#0266b3]"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                    Area / Branch
+                  </label>
+                  <input
+                    type="text"
+                    value={clinicFormData.branch}
+                    onChange={(e) =>
+                      setClinicFormData({ ...clinicFormData, branch: e.target.value })
+                    }
+                    placeholder="e.g. New Baneshwor"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 focus:outline-none focus:border-[#0266b3]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                    City
+                  </label>
+                  <input
+                    type="text"
+                    value={clinicFormData.city}
+                    onChange={(e) =>
+                      setClinicFormData({ ...clinicFormData, city: e.target.value })
+                    }
+                    placeholder="e.g. Kathmandu"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 focus:outline-none focus:border-[#0266b3]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                    Distance Note
+                  </label>
+                  <input
+                    type="text"
+                    value={clinicFormData.distance}
+                    onChange={(e) =>
+                      setClinicFormData({ ...clinicFormData, distance: e.target.value })
+                    }
+                    placeholder="e.g. 1.2 Km away"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 focus:outline-none focus:border-[#0266b3]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                    Operating Hours
+                  </label>
+                  <input
+                    type="text"
+                    value={clinicFormData.timing}
+                    onChange={(e) =>
+                      setClinicFormData({ ...clinicFormData, timing: e.target.value })
+                    }
+                    placeholder="e.g. 9 AM - 6 PM"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 focus:outline-none focus:border-[#0266b3]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                  Full Street Address
+                </label>
+                <input
+                  type="text"
+                  value={clinicFormData.address}
+                  onChange={(e) =>
+                    setClinicFormData({ ...clinicFormData, address: e.target.value })
+                  }
+                  placeholder="e.g. New Baneshwor Chowk, Kathmandu"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 focus:outline-none focus:border-[#0266b3]"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                    Contact Phone
+                  </label>
+                  <input
+                    type="text"
+                    value={clinicFormData.phone}
+                    onChange={(e) =>
+                      setClinicFormData({ ...clinicFormData, phone: e.target.value })
+                    }
+                    placeholder="e.g. +977-1-4782101"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 font-mono focus:outline-none focus:border-[#0266b3]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                    GPS Coordinates (Lat, Lng)
+                  </label>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <input
+                      type="number"
+                      step="any"
+                      value={clinicFormData.latitude}
+                      onChange={(e) =>
+                        setClinicFormData({
+                          ...clinicFormData,
+                          latitude: parseFloat(e.target.value) || 0,
+                        })
+                      }
+                      placeholder="Latitude"
+                      className="w-full px-2.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-800 font-mono focus:outline-none focus:border-[#0266b3]"
+                    />
+                    <input
+                      type="number"
+                      step="any"
+                      value={clinicFormData.longitude}
+                      onChange={(e) =>
+                        setClinicFormData({
+                          ...clinicFormData,
+                          longitude: parseFloat(e.target.value) || 0,
+                        })
+                      }
+                      placeholder="Longitude"
+                      className="w-full px-2.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-800 font-mono focus:outline-none focus:border-[#0266b3]"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Modal Actions */}
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsClinicModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingClinic}
+                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-[#031b33] to-[#0266b3] hover:from-[#021324] hover:to-[#024982] text-white text-xs font-bold transition shadow-sm cursor-pointer flex items-center gap-1.5"
+                >
+                  {isSavingClinic ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-3.5 h-3.5 text-cyan-300" />
+                      <span>{editingClinic ? "Update Clinic" : "Save Clinic Branch"}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

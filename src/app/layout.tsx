@@ -29,9 +29,42 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  if (typeof document !== 'undefined' && document.documentElement) {
+                    document.documentElement.removeAttribute('crxemulator');
+                    document.documentElement.removeAttribute('crxemulator-bridged');
+                    var origSetAttr = Element.prototype.setAttribute;
+                    Element.prototype.setAttribute = function(name, val) {
+                      if (name === 'crxemulator' || name === 'crxemulator-bridged') return;
+                      return origSetAttr.apply(this, arguments);
+                    };
+                    if (typeof MutationObserver !== 'undefined') {
+                      var observer = new MutationObserver(function(mutations) {
+                        for (var i = 0; i < mutations.length; i++) {
+                          var attr = mutations[i].attributeName;
+                          if (attr === 'crxemulator' || attr === 'crxemulator-bridged') {
+                            document.documentElement.removeAttribute(attr);
+                          }
+                        }
+                      });
+                      observer.observe(document.documentElement, { attributes: true });
+                    }
+                  }
+                } catch (e) {}
+              })();
+            `,
+          }}
+        />
+      </head>
+      <body suppressHydrationWarning className="min-h-full flex flex-col">
         <StoreProvider>{children}</StoreProvider>
       </body>
     </html>
