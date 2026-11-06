@@ -14,6 +14,9 @@ const {
   uploadBookCover,
   getClinics,
   updateClinics,
+  addClinic,
+  deleteClinic,
+  updateSingleClinic,
   getPromoVideo,
   updatePromoVideo,
 } = require("../controllers/bookController");
@@ -23,8 +26,12 @@ const upload = require("../middleware/upload");
 // Public Book Information & Stats
 router.get("/", getBooks);
 router.get("/stats", getBookStats);
+// Clinics Management
 router.get("/clinics", getClinics);
 router.put("/clinics", updateClinics);
+router.post("/clinics", addClinic);
+router.delete("/clinics/:clinicId", deleteClinic);
+router.patch("/clinics/:clinicId", updateSingleClinic);
 router.get("/promo-video", getPromoVideo);
 router.put("/promo-video", updatePromoVideo);
 router.get("/:id", getBookById);

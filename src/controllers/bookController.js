@@ -282,6 +282,150 @@ exports.updateClinics = async (req, res, next) => {
   }
 };
 
+// POST /api/books/clinics (Superadmin add clinic)
+exports.addClinic = async (req, res, next) => {
+  try {
+    const {
+      name,
+      branch,
+      distance,
+      timing,
+      address,
+      phone,
+      city,
+      latitude,
+      longitude,
+    } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Clinic branch name is required",
+      });
+    }
+
+    let book = await Book.findOne();
+    if (!book) {
+      book = await Book.create({ ...DEFAULT_BOOK });
+    }
+
+    const newClinic = {
+      id: "clinic_" + Date.now(),
+      name: name.trim(),
+      branch: branch ? branch.trim() : "",
+      distance: distance ? distance.trim() : "1.0 Km away",
+      timing: timing ? timing.trim() : "9 AM - 6 PM",
+      address: address ? address.trim() : "",
+      phone: phone ? phone.trim() : "+977-1-4782000",
+      city: city ? city.trim() : "Kathmandu",
+      latitude: Number(latitude) || 27.6915,
+      longitude: Number(longitude) || 85.342,
+    };
+
+    book.pickupClinics.push(newClinic);
+    await book.save();
+
+    res.status(201).json({
+      success: true,
+      message: "Pickup clinic branch added successfully",
+      data: book.pickupClinics,
+      addedClinic: newClinic,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// DELETE /api/books/clinics/:clinicId (Superadmin delete clinic)
+exports.deleteClinic = async (req, res, next) => {
+  try {
+    const { clinicId } = req.params;
+    let book = await Book.findOne();
+    if (!book) {
+      return res.status(404).json({
+        success: false,
+        message: "No book found",
+      });
+    }
+
+    const initialCount = book.pickupClinics.length;
+    book.pickupClinics = book.pickupClinics.filter((c) => {
+      const matchId = c.id && c.id.toString() === clinicId.toString();
+      const matchMongoId = c._id && c._id.toString() === clinicId.toString();
+      return !matchId && !matchMongoId;
+    });
+
+    if (book.pickupClinics.length === initialCount) {
+      return res.status(404).json({
+        success: false,
+        message: `Clinic with ID '${clinicId}' was not found`,
+      });
+    }
+
+    await book.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Pickup clinic branch removed successfully",
+      data: book.pickupClinics,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// PATCH /api/books/clinics/:clinicId (Superadmin update single clinic)
+exports.updateSingleClinic = async (req, res, next) => {
+  try {
+    const { clinicId } = req.params;
+    const updates = req.body;
+
+    let book = await Book.findOne();
+    if (!book) {
+      return res.status(404).json({
+        success: false,
+        message: "No book found",
+      });
+    }
+
+    const clinicIndex = book.pickupClinics.findIndex((c) => {
+      const matchId = c.id && c.id.toString() === clinicId.toString();
+      const matchMongoId = c._id && c._id.toString() === clinicId.toString();
+      return matchId || matchMongoId;
+    });
+
+    if (clinicIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        message: `Clinic with ID '${clinicId}' was not found`,
+      });
+    }
+
+    const current = book.pickupClinics[clinicIndex];
+    if (updates.name !== undefined) current.name = updates.name.trim();
+    if (updates.branch !== undefined) current.branch = updates.branch.trim();
+    if (updates.distance !== undefined) current.distance = updates.distance.trim();
+    if (updates.timing !== undefined) current.timing = updates.timing.trim();
+    if (updates.address !== undefined) current.address = updates.address.trim();
+    if (updates.phone !== undefined) current.phone = updates.phone.trim();
+    if (updates.city !== undefined) current.city = updates.city.trim();
+    if (updates.latitude !== undefined) current.latitude = Number(updates.latitude);
+    if (updates.longitude !== undefined) current.longitude = Number(updates.longitude);
+
+    book.pickupClinics[clinicIndex] = current;
+    await book.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Clinic updated successfully",
+      data: book.pickupClinics,
+      updatedClinic: current,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // GET /api/books/:id
 exports.getBookById = async (req, res, next) => {
   try {

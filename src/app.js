@@ -7,6 +7,7 @@ const rateLimit = require("express-rate-limit");
 const authRoutes = require("./routes/authRoutes");
 const bookRoutes = require("./routes/bookRoutes");
 const videoRoutes = require("./routes/videoRoutes");
+const driverRoutes = require("./routes/driverRoutes");
 const { notFound, errorHandler } = require("./middleware/errorHandler");
 
 const app = express();
@@ -79,6 +80,7 @@ app.get("/api/health", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/books", bookRoutes);
 app.use("/api/videos", videoRoutes);
+app.use("/api/driver", driverRoutes);
 
 // 8. 404 & Central Error Handling
 app.use(notFound);

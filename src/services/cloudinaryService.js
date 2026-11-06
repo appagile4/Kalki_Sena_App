@@ -74,6 +74,73 @@ const uploadBookCoverToCloudinary = async (fileSource) => {
 };
 
 /**
+ * Upload driver verification document to Cloudinary in a separate person folder
+ * @param {Buffer|string} fileSource
+ * @param {string} personName - Applicant's full name or email
+ * @param {string} docType - e.g. "license_front", "license_back", "rc_document", etc.
+ * @returns {Promise<{ url: string, publicId: string }>}
+ */
+const uploadDriverDocToCloudinary = async (
+  fileSource,
+  personName = "applicant",
+  docType = "doc"
+) => {
+  const sanitizedFolder =
+    String(personName)
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9_-]/g, "_")
+      .replace(/_+/g, "_")
+      .slice(0, 50) || "applicant";
+
+  const defaultOptions = {
+    folder: `kalki_sena/drivers/${sanitizedFolder}`,
+    public_id: `${docType}_${Date.now()}`,
+    resource_type: "image",
+    transformation: [
+      { width: 1600, height: 1600, crop: "limit" },
+      { quality: "auto:good" },
+      { fetch_format: "auto" },
+    ],
+  };
+
+  if (Buffer.isBuffer(fileSource)) {
+    return new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        defaultOptions,
+        (error, result) => {
+          if (error) return reject(error);
+          resolve({
+            url: result.secure_url,
+            publicId: result.public_id,
+          });
+        }
+      );
+      uploadStream.end(fileSource);
+    });
+  }
+
+  if (typeof fileSource === "string") {
+    let uploadData = fileSource;
+    if (
+      !fileSource.startsWith("data:") &&
+      !fileSource.startsWith("http://") &&
+      !fileSource.startsWith("https://")
+    ) {
+      uploadData = `data:image/jpeg;base64,${fileSource}`;
+    }
+
+    const result = await cloudinary.uploader.upload(uploadData, defaultOptions);
+    return {
+      url: result.secure_url,
+      publicId: result.public_id,
+    };
+  }
+
+  throw new Error("Invalid file source provided for upload");
+};
+
+/**
  * Delete an image from Cloudinary by public ID
  */
 const deleteAvatarFromCloudinary = async (publicId) => {
@@ -164,6 +231,7 @@ const deleteVideoFromCloudinary = async (publicId) => {
 module.exports = {
   uploadAvatarToCloudinary,
   uploadBookCoverToCloudinary,
+  uploadDriverDocToCloudinary,
   deleteAvatarFromCloudinary,
   uploadVideoToCloudinary,
   deleteVideoFromCloudinary,
