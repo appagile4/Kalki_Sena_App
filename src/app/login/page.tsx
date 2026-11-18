@@ -1,8 +1,10 @@
 "use client";
 
 import React, { useState } from "react";
+import Image from "next/image";
 import { Mail, Lock, Eye, EyeOff } from "lucide-react";
 import Navbar from "../../components/Navbar";
+import Footer from "../../components/Footer";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -17,7 +19,7 @@ export default function LoginPage() {
     setErrorMessage(null);
 
     if (!email.trim()) {
-      setErrorMessage("Please enter your email address");
+      setErrorMessage("Please enter your email or phone number");
       return;
     }
 
@@ -30,7 +32,8 @@ export default function LoginPage() {
       setIsLoading(true);
 
       const apiUrl =
-        process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+        process.env.NEXT_PUBLIC_API_URL || "https://api.kalkisenadrive.com/api";
+      const cleanEmail = email.trim();
       const res = await fetch(`${apiUrl}/auth/login`, {
         method: "POST",
         headers: {
@@ -38,7 +41,8 @@ export default function LoginPage() {
           Accept: "application/json",
         },
         body: JSON.stringify({
-          identifier: email.trim(),
+          identifier: cleanEmail,
+          email: cleanEmail,
           password,
         }),
       });
@@ -260,30 +264,22 @@ export default function LoginPage() {
       </div>
 
       {/* TOP NAVIGATION BAR */}
-      <Navbar brandName="Kalki Sena Drive" logoSrc="/logo.png" />
+      <Navbar brandName="Kalki Sena Drive" logoSrc="/logo-white.png" />
 
       {/* MAIN CONTENT AREA - LOGIN CARD */}
       <main className="relative z-10 flex-1 flex items-center justify-center px-4 py-8 sm:py-10">
         <div className="w-full max-w-[430px] bg-white rounded-[26px] p-8 sm:p-9 shadow-[0_15px_50px_-10px_rgba(2,27,51,0.12)] border border-slate-100">
           
-          {/* Top Concentric User Avatar */}
-          <div className="flex justify-center mb-5">
-            <div className="relative flex items-center justify-center w-[90px] h-[90px] rounded-full bg-[#e0f2fe]/70">
-              {/* Outer soft cyan radiant ring */}
-              <div className="absolute w-[76px] h-[76px] rounded-full bg-[#bae6fd]/50" />
-
-              {/* Inner deep navy circle with cyan glow border */}
-              <div className="relative z-10 flex items-center justify-center w-[60px] h-[60px] rounded-full bg-[#031b33] ring-4 ring-[#38bdf8] shadow-[0_4px_18px_rgba(56,189,248,0.4)]">
-                {/* Solid White User Silhouette */}
-                <svg
-                  className="w-7 h-7 text-white"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                >
-                  <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z" />
-                </svg>
-              </div>
-            </div>
+          {/* Brand Logo inside Login Card */}
+          <div className="flex justify-center mb-6">
+            <Image
+              src="/logo.png"
+              alt="Kalki Sena Drive"
+              width={220}
+              height={60}
+              className="h-12 w-auto object-contain"
+              priority
+            />
           </div>
 
           {/* Title: "Welcome Back!" */}
@@ -318,13 +314,13 @@ export default function LoginPage() {
                 <Mail className="w-[19px] h-[19px] text-[#64748b]" strokeWidth={1.8} />
               </span>
               <input
-                type="email"
+                type="text"
                 value={email}
                 onChange={(e) => {
                   setEmail(e.target.value);
                   if (errorMessage) setErrorMessage(null);
                 }}
-                placeholder="Email Address"
+                placeholder="Email or Phone Number"
                 className="w-full h-[50px] pl-11 pr-4 bg-white border border-[#e2e8f0] rounded-xl text-sm text-[#1e293b] placeholder:text-[#94a3b8] focus:outline-none focus:border-[#0266b3] focus:ring-2 focus:ring-[#0266b3]/15 transition-all duration-150"
               />
             </div>
@@ -374,8 +370,8 @@ export default function LoginPage() {
         </div>
       </main>
 
-      {/* Empty bottom spacer to keep layout balanced */}
-      <div className="h-4" />
+      {/* Footer with App Download Badges & Legal Links */}
+      <Footer />
 
     </div>
   );

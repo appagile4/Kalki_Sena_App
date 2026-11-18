@@ -1,7 +1,7 @@
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+  process.env.NEXT_PUBLIC_API_URL || "https://api.kalkisenadrive.com/api";
 
 export interface BookChapter {
   _id?: string;
@@ -66,6 +66,11 @@ export interface BookData {
   chapters?: BookChapter[];
   reviews?: BookReview[];
   promoVideo?: PromoVideoData;
+  pdfUrl?: string;
+  pdfPublicId?: string;
+  pdfFileName?: string;
+  pdfFileSize?: number;
+  pdfUploadedAt?: string;
   totalSold?: number;
   targetGoal?: number;
   stockQuantity?: number;
@@ -114,14 +119,82 @@ export interface BookStats {
   bookPrice: number;
 }
 
+export interface PaymentUser {
+  _id: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  role: string;
+  avatar?: string;
+  createdAt?: string;
+}
+
+export interface PaymentOrder {
+  _id: string;
+  orderId: string;
+  customerName: string;
+  customerEmail?: string;
+  customerPhone?: string;
+  bookAppearance: "physical" | "digital";
+  pickupLocation?: string;
+  paymentStatus: string;
+  orderStatus: string;
+  createdAt?: string;
+}
+
+export interface PaymentRecord {
+  _id: string;
+  order?: PaymentOrder;
+  user?: PaymentUser;
+  book?: {
+    _id: string;
+    title: string;
+    price: number;
+    author: string;
+    coverImage?: string;
+  };
+  paymentMethod: "esewa" | "khalti" | "qr" | "bank";
+  transactionUuid: string;
+  transactionCode?: string;
+  amount: number;
+  taxAmount: number;
+  totalAmount: number;
+  currency: string;
+  status: "pending" | "completed" | "failed" | "cancelled";
+  environment: string;
+  signature?: string;
+  verifiedAt?: string;
+  verifiedBy?: string;
+  failureReason?: string;
+  esewaResponseRaw?: any;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PaymentSummary {
+  verifiedRevenue: number;
+  completedCount: number;
+  pendingCount: number;
+  failedCount: number;
+  cancelledCount: number;
+  totalTransactions: number;
+  currency: string;
+}
+
 export interface BookState {
   books: BookData[];
   activeBook: BookData | null;
   orders: BookOrder[];
+  payments: PaymentRecord[];
+  paymentSummary: PaymentSummary | null;
+  selectedPaymentDetail: PaymentRecord | null;
   stats: BookStats | null;
   loading: boolean;
+  paymentsLoading: boolean;
+  paymentDetailLoading: boolean;
   orderSubmitting: boolean;
   uploadingImage: boolean;
+  uploadingPdf: boolean;
   error: string | null;
   successMessage: string | null;
 }
@@ -130,10 +203,16 @@ const initialState: BookState = {
   books: [],
   activeBook: null,
   orders: [],
+  payments: [],
+  paymentSummary: null,
+  selectedPaymentDetail: null,
   stats: null,
   loading: false,
+  paymentsLoading: false,
+  paymentDetailLoading: false,
   orderSubmitting: false,
   uploadingImage: false,
+  uploadingPdf: false,
   error: null,
   successMessage: null,
 };
@@ -306,6 +385,49 @@ export const uploadBookCoverImage = createAsyncThunk(
   }
 );
 
+// Upload Book PDF (Digital Edition)
+export const uploadBookPdf = createAsyncThunk(
+  "book/uploadBookPdf",
+  async (file: File, { rejectWithValue, dispatch }) => {
+    try {
+      const formData = new FormData();
+      formData.append("pdf", file);
+      const response = await fetch(`${API_BASE_URL}/books/upload-pdf`, {
+        method: "POST",
+        body: formData,
+      });
+      const data = await response.json();
+      if (!data.success) {
+        return rejectWithValue(data.message || "Failed to upload PDF");
+      }
+      dispatch(fetchBooks());
+      return data.data as BookData;
+    } catch (err: any) {
+      return rejectWithValue(err.message || "Network error uploading PDF");
+    }
+  }
+);
+
+// Delete Book PDF
+export const deleteBookPdf = createAsyncThunk(
+  "book/deleteBookPdf",
+  async (_, { rejectWithValue, dispatch }) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/books/pdf`, {
+        method: "DELETE",
+      });
+      const data = await response.json();
+      if (!data.success) {
+        return rejectWithValue(data.message || "Failed to remove PDF");
+      }
+      dispatch(fetchBooks());
+      return data.data as BookData;
+    } catch (err: any) {
+      return rejectWithValue(err.message || "Network error removing PDF");
+    }
+  }
+);
+
 export const addPickupClinic = createAsyncThunk(
   "book/addPickupClinic",
   async (clinicData: Partial<PickupClinic>, { rejectWithValue, dispatch }) => {
@@ -391,12 +513,133 @@ export const updatePickupClinics = createAsyncThunk(
   }
 );
 
+// -------------------------------------------------------------
+// Superadmin eSewa Payments & Verification Async Thunks
+// -------------------------------------------------------------
+const getAdminAuthHeaders = (): Record<string, string> => {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  };
+  if (typeof window !== "undefined") {
+    const token = localStorage.getItem("superadmin_token");
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+  }
+  return headers;
+};
+
+export const fetchAdminPayments = createAsyncThunk(
+  "book/fetchAdminPayments",
+  async (
+    params: { status?: string; search?: string; appearance?: string } | void,
+    { rejectWithValue }
+  ) => {
+    try {
+      const query = new URLSearchParams();
+      if (params?.status && params.status !== "all") {
+        query.append("status", params.status);
+      }
+      if (params?.search) {
+        query.append("search", params.search);
+      }
+      if (params?.appearance && params.appearance !== "all") {
+        query.append("appearance", params.appearance);
+      }
+
+      const qs = query.toString() ? `?${query.toString()}` : "";
+      const response = await fetch(`${API_BASE_URL}/admin/payments${qs}`, {
+        headers: getAdminAuthHeaders(),
+      });
+      const data = await response.json();
+      if (!data.success) {
+        return rejectWithValue(data.message || "Failed to fetch payments");
+      }
+      return data.data as PaymentRecord[];
+    } catch (err: any) {
+      return rejectWithValue(err.message || "Network error fetching payments");
+    }
+  }
+);
+
+export const fetchPaymentSummary = createAsyncThunk(
+  "book/fetchPaymentSummary",
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/admin/payments/summary`, {
+        headers: getAdminAuthHeaders(),
+      });
+      const data = await response.json();
+      if (!data.success) {
+        return rejectWithValue(data.message || "Failed to fetch payment summary");
+      }
+      return data.data as PaymentSummary;
+    } catch (err: any) {
+      return rejectWithValue(err.message || "Network error fetching summary");
+    }
+  }
+);
+
+export const fetchPaymentById = createAsyncThunk(
+  "book/fetchPaymentById",
+  async (paymentId: string, { rejectWithValue }) => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/admin/payments/${paymentId}`,
+        {
+          headers: getAdminAuthHeaders(),
+        }
+      );
+      const data = await response.json();
+      if (!data.success) {
+        return rejectWithValue(data.message || "Failed to fetch payment details");
+      }
+      return data.data as PaymentRecord;
+    } catch (err: any) {
+      return rejectWithValue(err.message || "Network error fetching payment");
+    }
+  }
+);
+
+export const reverifyPaymentWithEsewa = createAsyncThunk(
+  "book/reverifyPaymentWithEsewa",
+  async (paymentId: string, { rejectWithValue, dispatch }) => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/admin/payments/${paymentId}/re-verify`,
+        {
+          method: "POST",
+          headers: getAdminAuthHeaders(),
+        }
+      );
+      const data = await response.json();
+      if (!data.success && !data.data) {
+        return rejectWithValue(data.message || "eSewa status check failed");
+      }
+      dispatch(fetchAdminPayments());
+      dispatch(fetchPaymentSummary());
+      return data.data as PaymentRecord;
+    } catch (err: any) {
+      return rejectWithValue(
+        err.message || "Network error re-verifying payment"
+      );
+    }
+  }
+);
+
 export const bookSlice = createSlice({
   name: "book",
   initialState,
   reducers: {
     setActiveBook: (state, action: PayloadAction<BookData>) => {
       state.activeBook = action.payload;
+    },
+    setSelectedPaymentDetail: (
+      state,
+      action: PayloadAction<PaymentRecord | null>
+    ) => {
+      state.selectedPaymentDetail = action.payload;
     },
     clearMessages: (state) => {
       state.error = null;
@@ -482,6 +725,45 @@ export const bookSlice = createSlice({
         state.error = (action.payload as string) || "Failed to upload image";
       });
 
+    // Book PDF Upload & Removal
+    builder
+      .addCase(uploadBookPdf.pending, (state) => {
+        state.uploadingPdf = true;
+        state.error = null;
+      })
+      .addCase(uploadBookPdf.fulfilled, (state, action) => {
+        state.uploadingPdf = false;
+        if (state.activeBook) {
+          state.activeBook.pdfUrl = action.payload.pdfUrl;
+          state.activeBook.pdfFileName = action.payload.pdfFileName;
+          state.activeBook.pdfFileSize = action.payload.pdfFileSize;
+          state.activeBook.pdfUploadedAt = action.payload.pdfUploadedAt;
+        }
+        state.successMessage = "Book PDF uploaded and attached successfully!";
+      })
+      .addCase(uploadBookPdf.rejected, (state, action) => {
+        state.uploadingPdf = false;
+        state.error = (action.payload as string) || "Failed to upload PDF file";
+      })
+      .addCase(deleteBookPdf.pending, (state) => {
+        state.uploadingPdf = true;
+        state.error = null;
+      })
+      .addCase(deleteBookPdf.fulfilled, (state) => {
+        state.uploadingPdf = false;
+        if (state.activeBook) {
+          state.activeBook.pdfUrl = "";
+          state.activeBook.pdfFileName = "";
+          state.activeBook.pdfFileSize = 0;
+          state.activeBook.pdfUploadedAt = undefined;
+        }
+        state.successMessage = "Book PDF removed successfully!";
+      })
+      .addCase(deleteBookPdf.rejected, (state, action) => {
+        state.uploadingPdf = false;
+        state.error = (action.payload as string) || "Failed to remove PDF file";
+      });
+
     // Pickup Clinics CRUD
     builder
       .addCase(addPickupClinic.pending, (state) => {
@@ -544,8 +826,49 @@ export const bookSlice = createSlice({
         state.loading = false;
         state.error = (action.payload as string) || "Failed to update clinics list";
       });
+
+    // Superadmin Payments Management
+    builder
+      .addCase(fetchAdminPayments.pending, (state) => {
+        state.paymentsLoading = true;
+      })
+      .addCase(fetchAdminPayments.fulfilled, (state, action) => {
+        state.paymentsLoading = false;
+        state.payments = action.payload;
+      })
+      .addCase(fetchAdminPayments.rejected, (state, action) => {
+        state.paymentsLoading = false;
+        state.error = (action.payload as string) || "Failed to fetch payments";
+      })
+      .addCase(fetchPaymentSummary.fulfilled, (state, action) => {
+        state.paymentSummary = action.payload;
+      })
+      .addCase(fetchPaymentById.pending, (state) => {
+        state.paymentDetailLoading = true;
+      })
+      .addCase(fetchPaymentById.fulfilled, (state, action) => {
+        state.paymentDetailLoading = false;
+        state.selectedPaymentDetail = action.payload;
+      })
+      .addCase(fetchPaymentById.rejected, (state, action) => {
+        state.paymentDetailLoading = false;
+        state.error = (action.payload as string) || "Failed to fetch payment details";
+      })
+      .addCase(reverifyPaymentWithEsewa.pending, (state) => {
+        state.paymentDetailLoading = true;
+      })
+      .addCase(reverifyPaymentWithEsewa.fulfilled, (state, action) => {
+        state.paymentDetailLoading = false;
+        state.selectedPaymentDetail = action.payload;
+        state.successMessage = "eSewa status successfully checked & refreshed!";
+      })
+      .addCase(reverifyPaymentWithEsewa.rejected, (state, action) => {
+        state.paymentDetailLoading = false;
+        state.error = (action.payload as string) || "eSewa verification failed";
+      });
   },
 });
 
-export const { setActiveBook, clearMessages } = bookSlice.actions;
+export const { setActiveBook, setSelectedPaymentDetail, clearMessages } =
+  bookSlice.actions;
 export default bookSlice.reducer;

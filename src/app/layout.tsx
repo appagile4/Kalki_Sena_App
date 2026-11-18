@@ -17,7 +17,15 @@ export const metadata: Metadata = {
   title: "Superadmin Terminal | Kalki Sena Command Center",
   description: "Restricted Level-5 Command Console & Administrative Management Portal",
   icons: {
-    icon: "/favicon.ico",
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon.png", type: "image/png", sizes: "512x512" },
+      { url: "/favicon.png", type: "image/png", sizes: "32x32" },
+    ],
+    apple: [
+      { url: "/apple-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+    shortcut: "/favicon.ico",
   },
 };
 

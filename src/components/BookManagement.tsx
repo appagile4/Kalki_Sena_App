@@ -15,9 +15,18 @@ import {
   deletePickupClinic,
   updateSinglePickupClinic,
   updatePickupClinics,
+  uploadBookPdf,
+  deleteBookPdf,
+  fetchAdminPayments,
+  fetchPaymentSummary,
+  fetchPaymentById,
+  reverifyPaymentWithEsewa,
+  setSelectedPaymentDetail,
   clearMessages,
   BookChapter,
   PickupClinic,
+  PaymentRecord,
+  PaymentSummary,
 } from "../redux/slices/bookSlice";
 import {
   BookOpen,
@@ -48,10 +57,14 @@ import {
   ListOrdered,
   Upload,
   ImageIcon,
+  FileText,
+  Download,
   Video,
   Play,
   Phone,
   Navigation,
+  AlertCircle,
+  ShieldCheck,
   X,
 } from "lucide-react";
 
@@ -61,15 +74,22 @@ export default function BookManagement() {
     books,
     activeBook,
     orders,
+    payments = [],
+    paymentSummary,
+    selectedPaymentDetail,
+    paymentsLoading,
+    paymentDetailLoading,
     stats,
     loading,
     orderSubmitting,
     uploadingImage,
+    uploadingPdf,
     error,
     successMessage,
   } = useAppSelector((state) => state.book);
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const pdfInputRef = React.useRef<HTMLInputElement>(null);
 
   const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -78,11 +98,28 @@ export default function BookManagement() {
     }
   };
 
+  const handlePdfFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      await dispatch(uploadBookPdf(file));
+    }
+  };
+
+  const handleDeletePdf = async () => {
+    if (confirm("Are you sure you want to remove the book PDF document?")) {
+      await dispatch(deleteBookPdf());
+    }
+  };
+
   const [activeSubTab, setActiveSubTab] = useState<
-    "orders" | "preview" | "edit" | "create"
+    "orders" | "payments" | "preview" | "edit" | "create"
   >("orders");
   const [filterAppearance, setFilterAppearance] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<string>("all");
+  const [paymentSearch, setPaymentSearch] = useState<string>("");
+  const [paymentModalOpen, setPaymentModalOpen] = useState<boolean>(false);
+  const [inspectedPayment, setInspectedPayment] = useState<PaymentRecord | null>(null);
   const [previewTab, setPreviewTab] = useState<"About" | "Chapters" | "Reviews">("About");
   const [whyExpanded, setWhyExpanded] = useState<boolean>(false);
 
@@ -179,8 +216,12 @@ export default function BookManagement() {
     }
   }, [activeBook]);
 
-  // Chapter Handlers
+  // Chapter Handlers (Max 3 chapters limit)
   const handleAddChapter = () => {
+    if (chapters.length >= 3) {
+      alert("Only a maximum of 3 chapters can be added for the book.");
+      return;
+    }
     const nextNum = chapters.length + 1;
     setChapters([
       ...chapters,
@@ -188,7 +229,7 @@ export default function BookManagement() {
         chapterNumber: nextNum,
         title: `Chapter ${nextNum} | New Chapter Title`,
         pageRange: `Page No: ${nextNum * 40} - ${nextNum * 40 + 35}`,
-        excerpt: "Brief preview and synopsis of this chapter.",
+        excerpt: "Brief preview and synopsis lines of this chapter.",
       },
     ]);
   };
@@ -380,6 +421,8 @@ export default function BookManagement() {
     dispatch(fetchBooks());
     dispatch(fetchBookStats());
     dispatch(fetchBookOrders());
+    dispatch(fetchAdminPayments());
+    dispatch(fetchPaymentSummary());
   }, [dispatch]);
 
   // Handle Order Submit via Redux
@@ -439,6 +482,37 @@ export default function BookManagement() {
       order.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (order.customerPhone && order.customerPhone.includes(searchQuery));
     return matchesAppearance && matchesSearch;
+  });
+
+  // Filtered eSewa Payments
+  const filteredPayments = payments.filter((payment) => {
+    const matchesStatus =
+      paymentStatusFilter === "all" || payment.status === paymentStatusFilter;
+    const matchesAppearance =
+      filterAppearance === "all" ||
+      payment.order?.bookAppearance === filterAppearance;
+
+    if (!paymentSearch.trim()) return matchesStatus && matchesAppearance;
+
+    const q = paymentSearch.toLowerCase();
+    const u = payment.user;
+    const o = payment.order;
+    const matchesSearch =
+      Boolean(
+        payment.transactionUuid &&
+          payment.transactionUuid.toLowerCase().includes(q)
+      ) ||
+      Boolean(
+        payment.transactionCode &&
+          payment.transactionCode.toLowerCase().includes(q)
+      ) ||
+      Boolean(u?.fullName && u.fullName.toLowerCase().includes(q)) ||
+      Boolean(u?.email && u.email.toLowerCase().includes(q)) ||
+      Boolean(u?.phone && u.phone.includes(q)) ||
+      Boolean(o?.orderId && o.orderId.toLowerCase().includes(q)) ||
+      Boolean(o?.customerName && o.customerName.toLowerCase().includes(q));
+
+    return matchesStatus && matchesAppearance && matchesSearch;
   });
 
   const currentBook = activeBook || books[0];
@@ -615,6 +689,22 @@ export default function BookManagement() {
         </button>
 
         <button
+          onClick={() => {
+            setActiveSubTab("payments");
+            dispatch(fetchAdminPayments());
+            dispatch(fetchPaymentSummary());
+          }}
+          className={`pb-3 text-xs font-semibold flex items-center gap-2 border-b-2 transition cursor-pointer ${
+            activeSubTab === "payments"
+              ? "border-emerald-600 text-emerald-700"
+              : "border-transparent text-slate-500 hover:text-slate-800"
+          }`}
+        >
+          <CreditCard className="w-4 h-4 text-emerald-600" />
+          <span>eSewa Payments & User Details ({payments.length})</span>
+        </button>
+
+        <button
           onClick={() => setActiveSubTab("preview")}
           className={`pb-3 text-xs font-semibold flex items-center gap-2 border-b-2 transition cursor-pointer ${
             activeSubTab === "preview"
@@ -767,6 +857,11 @@ export default function BookManagement() {
                           >
                             {order.paymentMethod}
                           </span>
+                          {(order as any).esewaTransactionCode && (
+                            <p className="text-[10px] text-emerald-600 font-mono mt-1 font-bold">
+                              Ref: {(order as any).esewaTransactionCode}
+                            </p>
+                          )}
                         </td>
 
                         {/* Amount */}
@@ -814,6 +909,323 @@ export default function BookManagement() {
                         </td>
                       </tr>
                     ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------- SUB-TAB: ESEWA PAYMENTS & USER DETAILS ---------------- */}
+      {activeSubTab === "payments" && (
+        <div className="space-y-4">
+          {/* eSewa Gateway Architecture & Credentials Banner */}
+          <div className="bg-gradient-to-r from-[#031b33] to-[#06335d] p-5 rounded-2xl border border-white/10 text-white shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-[#60BB46] text-white flex items-center justify-center font-black text-2xl shrink-0 shadow-md">
+                e
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-sm tracking-wide">
+                    eSewa Native Payment Gateway
+                  </h3>
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-semibold border border-emerald-400/30">
+                    UAT Sandbox Active
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300 mt-0.5">
+                  Service Code: <span className="font-mono text-cyan-300 font-bold">EPAYTEST</span> • Status Verification: <span className="font-mono text-slate-300">rc-epay.esewa.com.np</span> • Server-side HMAC-SHA256 verified
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => {
+                  dispatch(fetchAdminPayments());
+                  dispatch(fetchPaymentSummary());
+                }}
+                disabled={paymentsLoading}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold transition border border-white/20 cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${paymentsLoading ? "animate-spin" : ""}`} />
+                <span>Sync eSewa Transactions</span>
+              </button>
+            </div>
+          </div>
+
+          {/* eSewa Specific KPI Overview */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm flex items-center gap-3.5">
+              <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                <CreditCard className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 font-medium">Verified eSewa Revenue</p>
+                <h3 className="text-xl font-bold text-emerald-600">
+                  NPR {(paymentSummary?.verifiedRevenue || 0).toLocaleString()}
+                </h3>
+                <span className="text-[10px] text-emerald-600 font-semibold font-mono">
+                  {paymentSummary?.completedCount || 0} Successful Orders
+                </span>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm flex items-center gap-3.5">
+              <div className="w-11 h-11 rounded-xl bg-blue-50 text-[#0266b3] flex items-center justify-center shrink-0">
+                <CheckCircle2 className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 font-medium">Completed Payments</p>
+                <h3 className="text-xl font-bold text-slate-800">
+                  {paymentSummary?.completedCount || 0}
+                </h3>
+                <span className="text-[10px] text-emerald-600 font-mono">
+                  Book Access Granted
+                </span>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm flex items-center gap-3.5">
+              <div className="w-11 h-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 font-medium">Pending Verification</p>
+                <h3 className="text-xl font-bold text-amber-600">
+                  {paymentSummary?.pendingCount || 0}
+                </h3>
+                <span className="text-[10px] text-slate-400 font-mono">
+                  Awaiting eSewa Gateway
+                </span>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm flex items-center gap-3.5">
+              <div className="w-11 h-11 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
+                <X className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 font-medium">Failed / Cancelled</p>
+                <h3 className="text-xl font-bold text-rose-600">
+                  {(paymentSummary?.failedCount || 0) + (paymentSummary?.cancelledCount || 0)}
+                </h3>
+                <span className="text-[10px] text-slate-400 font-mono">
+                  {paymentSummary?.failedCount || 0} Failed • {paymentSummary?.cancelledCount || 0} Cancelled
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Filters Bar */}
+          <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+              {/* Search */}
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-500 w-full sm:w-72">
+                <Search className="w-3.5 h-3.5 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search buyer name, email, phone, ref, order ID..."
+                  value={paymentSearch}
+                  onChange={(e) => setPaymentSearch(e.target.value)}
+                  className="bg-transparent outline-none w-full text-slate-700 text-xs"
+                />
+              </div>
+
+              {/* Status Filter */}
+              <select
+                value={paymentStatusFilter}
+                onChange={(e) => setPaymentStatusFilter(e.target.value)}
+                className="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 outline-none cursor-pointer"
+              >
+                <option value="all">All Payment Statuses</option>
+                <option value="completed">Completed (Paid)</option>
+                <option value="pending">Pending</option>
+                <option value="failed">Failed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+
+              {/* Format Filter */}
+              <select
+                value={filterAppearance}
+                onChange={(e) => setFilterAppearance(e.target.value)}
+                className="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 outline-none cursor-pointer"
+              >
+                <option value="all">All Editions</option>
+                <option value="digital">Digital E-Book</option>
+                <option value="physical">Physical Book</option>
+              </select>
+            </div>
+
+            <div className="text-xs text-slate-500 font-mono">
+              Showing {filteredPayments.length} of {payments.length} transactions
+            </div>
+          </div>
+
+          {/* Payments Table */}
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs text-slate-600">
+                <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-100 uppercase text-[10px] tracking-wider">
+                  <tr>
+                    <th className="py-3.5 px-4">Date & Time</th>
+                    <th className="py-3.5 px-4">Customer Details</th>
+                    <th className="py-3.5 px-4">Order & Edition</th>
+                    <th className="py-3.5 px-4">eSewa Reference & UUID</th>
+                    <th className="py-3.5 px-4">Amount</th>
+                    <th className="py-3.5 px-4">Payment Status</th>
+                    <th className="py-3.5 px-4">Verification</th>
+                    <th className="py-3.5 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredPayments.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="py-12 text-center text-slate-400">
+                        {paymentsLoading ? "Loading eSewa transactions..." : "No eSewa payments found matching your filter."}
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredPayments.map((p) => {
+                      const user = p.user;
+                      const order = p.order;
+                      const isCompleted = p.status === "completed";
+                      const isPending = p.status === "pending";
+                      const isFailed = p.status === "failed";
+
+                      return (
+                        <tr key={p._id} className="hover:bg-slate-50/60 transition">
+                          {/* Date */}
+                          <td className="py-3.5 px-4">
+                            <p className="font-semibold text-slate-800">
+                              {new Date(p.createdAt).toLocaleDateString()}
+                            </p>
+                            <p className="text-[10px] text-slate-400 font-mono">
+                              {new Date(p.createdAt).toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </p>
+                          </td>
+
+                          {/* Customer Details */}
+                          <td className="py-3.5 px-4">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center font-bold text-xs uppercase shrink-0">
+                                {user?.fullName ? user.fullName[0] : (order?.customerName ? order.customerName[0] : "K")}
+                              </div>
+                              <div>
+                                <p className="font-bold text-slate-800">
+                                  {user?.fullName || order?.customerName || "Kalki Reader"}
+                                </p>
+                                <p className="text-[10px] text-slate-500 font-mono">
+                                  {user?.email || order?.customerEmail || "No email"}
+                                </p>
+                                <p className="text-[10px] text-slate-400 font-mono">
+                                  {user?.phone || order?.customerPhone || "No phone"}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Order & Edition */}
+                          <td className="py-3.5 px-4">
+                            <p className="font-mono font-bold text-slate-800">
+                              {order?.orderId || "Pending"}
+                            </p>
+                            <span
+                              className={`inline-block mt-0.5 px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${
+                                order?.bookAppearance === "physical"
+                                  ? "bg-blue-50 text-[#0266b3] border border-blue-200"
+                                  : "bg-purple-50 text-purple-700 border border-purple-200"
+                              }`}
+                            >
+                              {order?.bookAppearance || "digital"}
+                            </span>
+                            {order?.pickupLocation && order.bookAppearance === "physical" && (
+                              <p className="text-[10px] text-slate-500 truncate max-w-[160px] mt-0.5" title={order.pickupLocation}>
+                                {order.pickupLocation}
+                              </p>
+                            )}
+                          </td>
+
+                          {/* eSewa Reference & UUID */}
+                          <td className="py-3.5 px-4 font-mono">
+                            {p.transactionCode ? (
+                              <p className="font-bold text-emerald-600 text-xs">
+                                Ref: {p.transactionCode}
+                              </p>
+                            ) : (
+                              <p className="text-slate-400 text-xs italic">
+                                Ref: Awaiting confirmation
+                              </p>
+                            )}
+                            <p className="text-[10px] text-slate-400 truncate max-w-[150px]" title={p.transactionUuid}>
+                              UUID: {p.transactionUuid}
+                            </p>
+                          </td>
+
+                          {/* Amount */}
+                          <td className="py-3.5 px-4 font-mono font-bold text-slate-800">
+                            {p.currency} {p.totalAmount.toLocaleString()}
+                          </td>
+
+                          {/* Status */}
+                          <td className="py-3.5 px-4">
+                            <span
+                              className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase inline-flex items-center gap-1 ${
+                                isCompleted
+                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                  : isPending
+                                  ? "bg-amber-50 text-amber-700 border border-amber-200"
+                                  : isFailed
+                                  ? "bg-rose-50 text-rose-700 border border-rose-200"
+                                  : "bg-slate-100 text-slate-600 border border-slate-200"
+                              }`}
+                            >
+                              {isCompleted && <CheckCircle2 className="w-3 h-3 text-emerald-600" />}
+                              {isPending && <Clock className="w-3 h-3 text-amber-600" />}
+                              {isFailed && <AlertCircle className="w-3 h-3 text-rose-600" />}
+                              {p.status}
+                            </span>
+                          </td>
+
+                          {/* Verification */}
+                          <td className="py-3.5 px-4">
+                            {p.verifiedAt ? (
+                              <div>
+                                <p className="text-emerald-700 font-semibold text-[11px] flex items-center gap-1">
+                                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                                  <span>Verified</span>
+                                </p>
+                                <p className="text-[10px] text-slate-400 font-mono">
+                                  {new Date(p.verifiedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                </p>
+                              </div>
+                            ) : (
+                              <span className="text-[10px] text-slate-400 font-mono italic">
+                                Not verified
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Action */}
+                          <td className="py-3.5 px-4 text-right">
+                            <button
+                              onClick={() => {
+                                setInspectedPayment(p);
+                                setPaymentModalOpen(true);
+                              }}
+                              className="px-2.5 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-semibold transition cursor-pointer"
+                            >
+                              Inspect Audit
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -933,7 +1345,7 @@ export default function BookManagement() {
                   {currentBook?.chapters?.map((ch: any, idx: number) => (
                     <div
                       key={idx}
-                      className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 space-y-1"
+                      className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 space-y-2"
                     >
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-bold text-slate-800">
@@ -943,7 +1355,11 @@ export default function BookManagement() {
                           {ch.pageRange}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-500">{ch.excerpt}</p>
+                      <div className="p-2.5 rounded-lg bg-blue-50/50 border-l-2 border-[#0266b3]">
+                        <p className="text-[11px] text-slate-600 italic leading-relaxed">
+                          &ldquo;{ch.excerpt}&rdquo;
+                        </p>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1216,6 +1632,100 @@ export default function BookManagement() {
               </div>
             </div>
 
+            {/* Book PDF (Digital Edition) Upload Section */}
+            <div className="p-5 rounded-2xl bg-gradient-to-r from-slate-50 via-blue-50/30 to-slate-50 border border-slate-200">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="flex items-start sm:items-center gap-4">
+                  <div className="w-14 h-16 rounded-xl bg-red-50 border border-red-200 flex flex-col items-center justify-center shrink-0 shadow-sm text-red-600">
+                    <FileText className="w-7 h-7" />
+                    <span className="text-[9px] font-bold tracking-wider mt-0.5 uppercase">PDF</span>
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-red-600" />
+                      <h3 className="text-sm font-bold text-slate-800">
+                        Book PDF & Digital Edition
+                      </h3>
+                      {activeBook?.pdfUrl ? (
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-semibold flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3" />
+                          PDF Attached
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-semibold">
+                          No PDF Attached
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-500 mt-1 max-w-md">
+                      Upload the full digital book PDF document. Readers and mobile app users can download or read this file directly.
+                    </p>
+                    {activeBook?.pdfUrl ? (
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
+                        <span className="font-semibold text-slate-800">
+                          {activeBook.pdfFileName || "Economic_Revolution_Book.pdf"}
+                        </span>
+                        {activeBook.pdfFileSize ? (
+                          <span className="text-slate-400 font-mono">
+                            ({(activeBook.pdfFileSize / (1024 * 1024)).toFixed(2)} MB)
+                          </span>
+                        ) : null}
+                        <a
+                          href={activeBook.pdfUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-[#0266b3] hover:underline font-semibold ml-1"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>Download / View PDF</span>
+                        </a>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <input
+                    type="file"
+                    ref={pdfInputRef}
+                    onChange={handlePdfFileChange}
+                    accept="application/pdf,.pdf"
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    disabled={uploadingPdf}
+                    onClick={() => pdfInputRef.current?.click()}
+                    className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-semibold flex items-center justify-center gap-2 transition shadow-sm cursor-pointer disabled:opacity-60"
+                  >
+                    {uploadingPdf ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Uploading PDF...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-4 h-4" />
+                        <span>{activeBook?.pdfUrl ? "Replace Book PDF" : "Upload Book PDF"}</span>
+                      </>
+                    )}
+                  </button>
+
+                  {activeBook?.pdfUrl ? (
+                    <button
+                      type="button"
+                      disabled={uploadingPdf}
+                      onClick={handleDeletePdf}
+                      className="px-3 py-2.5 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer border border-slate-200"
+                      title="Remove PDF"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+
             {/* Title & Subtitle */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div>
@@ -1433,19 +1943,20 @@ export default function BookManagement() {
                 <div>
                   <span className="text-xs font-bold text-slate-800 flex items-center gap-2">
                     <ListOrdered className="w-4 h-4 text-[#0266b3]" />
-                    <span>Book Chapters ({chapters.length})</span>
+                    <span>Book Chapters ({chapters.length} / 3 max)</span>
                   </span>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    Add, edit, or remove chapters. Changes will synchronize to the mobile app in real-time.
+                    Only up to 3 chapters can be added from the backend. Some preview lines of each chapter will display in the mobile book details.
                   </p>
                 </div>
                 <button
                   type="button"
+                  disabled={chapters.length >= 3}
                   onClick={handleAddChapter}
-                  className="px-3 py-1.5 rounded-xl bg-[#0266b3] hover:bg-[#02569b] text-white text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+                  className="px-3 py-1.5 rounded-xl bg-[#0266b3] hover:bg-[#02569b] disabled:bg-slate-300 disabled:cursor-not-allowed text-white text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Add Chapter</span>
+                  <span>{chapters.length >= 3 ? "Max 3 Chapters Reached" : "Add Chapter"}</span>
                 </button>
               </div>
 
@@ -2095,6 +2606,214 @@ export default function BookManagement() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------- PAYMENT INSPECTION & AUDIT MODAL ---------------- */}
+      {paymentModalOpen && inspectedPayment && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 my-8">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#60BB46] text-white flex items-center justify-center font-black text-xl shrink-0 shadow-sm">
+                  e
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-800">
+                    eSewa Transaction Audit Log
+                  </h3>
+                  <p className="text-xs text-slate-500 font-mono">
+                    UUID: {inspectedPayment.transactionUuid}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setPaymentModalOpen(false);
+                  setInspectedPayment(null);
+                }}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Status Banner */}
+            <div className="my-4">
+              {inspectedPayment.status === "completed" ? (
+                <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>
+                      <strong className="font-bold">Payment Verified & Settled.</strong> Official eSewa Reference ID:{" "}
+                      <span className="font-mono font-bold text-emerald-700">{inspectedPayment.transactionCode}</span>
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono text-emerald-600 font-semibold uppercase">
+                    {inspectedPayment.verifiedBy || "Server Verified"}
+                  </span>
+                </div>
+              ) : inspectedPayment.status === "pending" ? (
+                <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>Awaiting payment completion or gateway callback from eSewa.</span>
+                  </div>
+                  <span className="text-[10px] font-mono text-amber-700 font-semibold uppercase">Pending</span>
+                </div>
+              ) : (
+                <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span>
+                      Transaction Status: <strong className="uppercase">{inspectedPayment.status}</strong>. {inspectedPayment.failureReason || "Payment was rejected or cancelled."}
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono text-rose-700 font-semibold uppercase">{inspectedPayment.status}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Info Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+              {/* Customer Profile Box */}
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                <h4 className="font-bold text-slate-700 uppercase tracking-wider text-[10px] flex items-center gap-1.5 mb-2">
+                  <Users className="w-3.5 h-3.5 text-[#0266b3]" />
+                  <span>Customer / User Identity</span>
+                </h4>
+                <div className="flex justify-between py-1 border-b border-slate-200/60">
+                  <span className="text-slate-500">Full Name</span>
+                  <span className="font-semibold text-slate-800">
+                    {inspectedPayment.user?.fullName || inspectedPayment.order?.customerName || "Kalki Reader"}
+                  </span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-slate-200/60">
+                  <span className="text-slate-500">Email Address</span>
+                  <span className="font-mono text-slate-800 font-semibold">
+                    {inspectedPayment.user?.email || inspectedPayment.order?.customerEmail || "N/A"}
+                  </span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-slate-200/60">
+                  <span className="text-slate-500">Phone Number</span>
+                  <span className="font-mono text-slate-800 font-semibold">
+                    {inspectedPayment.user?.phone || inspectedPayment.order?.customerPhone || "N/A"}
+                  </span>
+                </div>
+                <div className="flex justify-between py-1">
+                  <span className="text-slate-500">User Role</span>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-blue-100 text-[#0266b3]">
+                    {inspectedPayment.user?.role || "Customer"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Order Information Box */}
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                <h4 className="font-bold text-slate-700 uppercase tracking-wider text-[10px] flex items-center gap-1.5 mb-2">
+                  <Package className="w-3.5 h-3.5 text-purple-600" />
+                  <span>Order & Book Details</span>
+                </h4>
+                <div className="flex justify-between py-1 border-b border-slate-200/60">
+                  <span className="text-slate-500">Order ID</span>
+                  <span className="font-mono text-slate-800 font-bold">
+                    {inspectedPayment.order?.orderId || "Pending"}
+                  </span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-slate-200/60">
+                  <span className="text-slate-500">Product</span>
+                  <span className="font-semibold text-slate-800 truncate max-w-[170px]" title="Economic Revolution to make Nepal A World Leader">
+                    Economic Revolution
+                  </span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-slate-200/60">
+                  <span className="text-slate-500">Edition Format</span>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-purple-50 text-purple-700 border border-purple-200">
+                    {inspectedPayment.order?.bookAppearance || "digital"}
+                  </span>
+                </div>
+                <div className="flex justify-between py-1">
+                  <span className="text-slate-500">Fulfillment</span>
+                  <span className="text-slate-700 truncate max-w-[170px]" title={inspectedPayment.order?.pickupLocation || "Digital In-App Access"}>
+                    {inspectedPayment.order?.pickupLocation || "Digital In-App Access"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Gateway Security & Signatures */}
+            <div className="mt-4 p-4 rounded-xl bg-slate-900 text-slate-200 font-mono text-[11px] space-y-2">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                <span className="text-emerald-400 font-bold flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  HMAC-SHA256 Gateway Protocol
+                </span>
+                <span className="text-slate-400 text-[10px]">Merchant: EPAYTEST</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-[10px]">
+                <div>
+                  <span className="text-slate-400">Total Amount:</span>{" "}
+                  <span className="text-white font-bold">{inspectedPayment.currency} {inspectedPayment.totalAmount}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400">Environment:</span>{" "}
+                  <span className="text-cyan-300 font-bold">{inspectedPayment.environment || "UAT"}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400">Verified Timestamp:</span>{" "}
+                  <span className="text-slate-300">
+                    {inspectedPayment.verifiedAt ? new Date(inspectedPayment.verifiedAt).toLocaleString() : "Awaiting Verification"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400">Signature:</span>{" "}
+                  <span className="text-slate-300 truncate inline-block max-w-[150px]" title={inspectedPayment.signature}>
+                    {inspectedPayment.signature || "N/A"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Raw eSewa Payload */}
+              {inspectedPayment.esewaResponseRaw && (
+                <div className="mt-3 pt-2 border-t border-slate-800">
+                  <p className="text-[10px] text-slate-400 mb-1">eSewa Raw Server Response:</p>
+                  <pre className="bg-slate-950 p-2.5 rounded-lg text-[10px] text-emerald-400 overflow-x-auto max-h-36">
+                    {JSON.stringify(inspectedPayment.esewaResponseRaw, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-between pt-5 mt-4 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={async () => {
+                  const res = await dispatch(reverifyPaymentWithEsewa(inspectedPayment._id));
+                  if (res.payload) {
+                    setInspectedPayment(res.payload as PaymentRecord);
+                  }
+                }}
+                disabled={paymentDetailLoading}
+                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${paymentDetailLoading ? "animate-spin" : ""}`} />
+                <span>Re-Verify Live with eSewa</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setPaymentModalOpen(false);
+                  setInspectedPayment(null);
+                }}
+                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

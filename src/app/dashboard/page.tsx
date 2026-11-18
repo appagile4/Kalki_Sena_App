@@ -238,12 +238,12 @@ export default function SuperadminDashboardPage() {
                     <Server className="w-6 h-6" />
                   </div>
                   <div>
-                    <p className="text-xs text-slate-500 font-medium">Backend Server</p>
+                    <p className="text-xs text-slate-500 font-medium">Live Production API</p>
                     <h3 className="text-lg font-bold text-emerald-600 truncate">
-                      Online (5000)
+                      api.kalkisenadrive.com
                     </h3>
                     <p className="text-[10px] text-slate-400 font-mono mt-0.5">
-                      Uptime: 99.98%
+                      SSL Active • 99.98%
                     </p>
                   </div>
                 </div>
