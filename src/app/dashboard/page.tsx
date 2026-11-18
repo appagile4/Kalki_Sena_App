@@ -131,8 +131,6 @@ export default function SuperadminDashboardPage() {
               />
             </div>
 
-
-
             {/* Notifications */}
             <button
               type="button"
@@ -212,7 +210,9 @@ export default function SuperadminDashboardPage() {
                     <Users className="w-6 h-6" />
                   </div>
                   <div>
-                    <p className="text-xs text-slate-500 font-medium">Total Users</p>
+                    <p className="text-xs text-slate-500 font-medium">
+                      Total Users
+                    </p>
                     <h3 className="text-2xl font-bold text-slate-800">1,248</h3>
                     <p className="text-[10px] text-emerald-600 font-semibold mt-0.5">
                       +12% this week
@@ -225,25 +225,12 @@ export default function SuperadminDashboardPage() {
                     <Car className="w-6 h-6" />
                   </div>
                   <div>
-                    <p className="text-xs text-slate-500 font-medium">Active Drivers</p>
+                    <p className="text-xs text-slate-500 font-medium">
+                      Active Drivers
+                    </p>
                     <h3 className="text-2xl font-bold text-slate-800">86</h3>
                     <p className="text-[10px] text-emerald-600 font-semibold mt-0.5">
                       82 on trip now
-                    </p>
-                  </div>
-                </div>
-
-                <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm flex items-center gap-4 hover:shadow-md transition">
-                  <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                    <Server className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500 font-medium">Live Production API</p>
-                    <h3 className="text-lg font-bold text-emerald-600 truncate">
-                      api.kalkisenadrive.com
-                    </h3>
-                    <p className="text-[10px] text-slate-400 font-mono mt-0.5">
-                      SSL Active • 99.98%
                     </p>
                   </div>
                 </div>
@@ -253,8 +240,12 @@ export default function SuperadminDashboardPage() {
                     <Database className="w-6 h-6" />
                   </div>
                   <div>
-                    <p className="text-xs text-slate-500 font-medium">MongoDB Cluster</p>
-                    <h3 className="text-lg font-bold text-purple-600">Connected</h3>
+                    <p className="text-xs text-slate-500 font-medium">
+                      MongoDB Cluster
+                    </p>
+                    <h3 className="text-lg font-bold text-purple-600">
+                      Connected
+                    </h3>
                     <p className="text-[10px] text-slate-400 font-mono mt-0.5">
                       kalki_sena DB
                     </p>
@@ -272,13 +263,16 @@ export default function SuperadminDashboardPage() {
                         <BookOpen className="w-3.5 h-3.5" />
                         <span>Gen Z Wave</span>
                       </span>
-                      <span className="text-xs text-slate-400 font-mono">10L Goal</span>
+                      <span className="text-xs text-slate-400 font-mono">
+                        10L Goal
+                      </span>
                     </div>
                     <h3 className="text-sm font-bold text-slate-800">
                       Economic Revolution Book
                     </h3>
                     <p className="text-xs text-slate-500 mt-1">
-                      Nationwide book orders, clinic pickups & 1 Lakh students free coaching fund.
+                      Nationwide book orders, clinic pickups & 1 Lakh students
+                      free coaching fund.
                     </p>
                   </div>
                   <button
@@ -298,13 +292,16 @@ export default function SuperadminDashboardPage() {
                         <FileCheck className="w-3.5 h-3.5" />
                         <span>Action Required</span>
                       </span>
-                      <span className="text-xs text-slate-400 font-mono">14 Pending</span>
+                      <span className="text-xs text-slate-400 font-mono">
+                        14 Pending
+                      </span>
                     </div>
                     <h3 className="text-sm font-bold text-slate-800">
                       Driver KYC Verifications
                     </h3>
                     <p className="text-xs text-slate-500 mt-1">
-                      14 new driver partners have submitted their Driving License and RC for validation.
+                      14 new driver partners have submitted their Driving
+                      License and RC for validation.
                     </p>
                   </div>
                   <button
@@ -324,13 +321,16 @@ export default function SuperadminDashboardPage() {
                         <CheckCircle2 className="w-3.5 h-3.5" />
                         <span>All Clear</span>
                       </span>
-                      <span className="text-xs text-slate-400 font-mono">0 Active</span>
+                      <span className="text-xs text-slate-400 font-mono">
+                        0 Active
+                      </span>
                     </div>
                     <h3 className="text-sm font-bold text-slate-800">
                       Emergency SOS Dispatch
                     </h3>
                     <p className="text-xs text-slate-500 mt-1">
-                      Real-time panic button listener is synchronized with local emergency services.
+                      Real-time panic button listener is synchronized with local
+                      emergency services.
                     </p>
                   </div>
                   <button
@@ -350,13 +350,16 @@ export default function SuperadminDashboardPage() {
                         <HeartPulse className="w-3.5 h-3.5" />
                         <span>Healthcare Hub</span>
                       </span>
-                      <span className="text-xs text-slate-400 font-mono">32 Verified</span>
+                      <span className="text-xs text-slate-400 font-mono">
+                        32 Verified
+                      </span>
                     </div>
                     <h3 className="text-sm font-bold text-slate-800">
                       Doctor & Health Network
                     </h3>
                     <p className="text-xs text-slate-500 mt-1">
-                      Manage registered medical practitioners and patient consultation appointment schedules.
+                      Manage registered medical practitioners and patient
+                      consultation appointment schedules.
                     </p>
                   </div>
                   <button
@@ -377,7 +380,8 @@ export default function SuperadminDashboardPage() {
                       Superadmin Management Control
                     </h2>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      Full root privilege to manage fleet drivers, doctors, registered users, and role permissions.
+                      Full root privilege to manage fleet drivers, doctors,
+                      registered users, and role permissions.
                     </p>
                   </div>
                   <span className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 text-xs font-mono font-semibold">
@@ -387,7 +391,9 @@ export default function SuperadminDashboardPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-mono">
                   <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80">
-                    <span className="text-slate-500 block mb-1">Root Database:</span>
+                    <span className="text-slate-500 block mb-1">
+                      Root Database:
+                    </span>
                     <span className="font-semibold text-slate-800 text-sm">
                       Cluster0 / kalki_sena
                     </span>
@@ -441,38 +447,41 @@ export default function SuperadminDashboardPage() {
             activeTab !== "kyc" &&
             activeTab !== "book" &&
             activeTab !== "video" && (
-            <div className="bg-white rounded-2xl p-8 border border-slate-100 shadow-sm text-center py-16">
-              <div className="w-14 h-14 rounded-2xl bg-blue-50 text-[#0266b3] mx-auto flex items-center justify-center mb-4">
-                <ShieldCheck className="w-7 h-7" />
+              <div className="bg-white rounded-2xl p-8 border border-slate-100 shadow-sm text-center py-16">
+                <div className="w-14 h-14 rounded-2xl bg-blue-50 text-[#0266b3] mx-auto flex items-center justify-center mb-4">
+                  <ShieldCheck className="w-7 h-7" />
+                </div>
+                <h2 className="text-xl font-bold text-slate-800">
+                  {getTabTitle(activeTab)}
+                </h2>
+                <p className="text-xs text-slate-500 max-w-md mx-auto mt-2">
+                  This administrative module is actively synchronized with the
+                  Kalki Sena root backend. Live controls and real-time feeds are
+                  enabled for your Level-5 Superadmin credentials.
+                </p>
+                <div className="mt-6 flex items-center justify-center gap-3">
+                  <button
+                    onClick={() => setActiveTab("overview")}
+                    className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition cursor-pointer"
+                  >
+                    Return to Overview
+                  </button>
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#031b33] to-[#0266b3] text-white text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Sync Module</span>
+                  </button>
+                </div>
               </div>
-              <h2 className="text-xl font-bold text-slate-800">
-                {getTabTitle(activeTab)}
-              </h2>
-              <p className="text-xs text-slate-500 max-w-md mx-auto mt-2">
-                This administrative module is actively synchronized with the Kalki Sena root backend. Live controls and real-time feeds are enabled for your Level-5 Superadmin credentials.
-              </p>
-              <div className="mt-6 flex items-center justify-center gap-3">
-                <button
-                  onClick={() => setActiveTab("overview")}
-                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition cursor-pointer"
-                >
-                  Return to Overview
-                </button>
-                <button
-                  onClick={() => window.location.reload()}
-                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#031b33] to-[#0266b3] text-white text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  <span>Sync Module</span>
-                </button>
-              </div>
-            </div>
-          )}
+            )}
         </main>
 
         {/* Console Footer */}
         <footer className="w-full border-t border-slate-200/60 bg-white py-4 px-6 text-center text-xs text-slate-400 mt-auto">
-          &copy; {new Date().getFullYear()} Kalki Sena Drive • Superadmin Administrative Console
+          &copy; {new Date().getFullYear()} Kalki Sena Drive • Superadmin
+          Administrative Console
         </footer>
       </div>
     </div>
