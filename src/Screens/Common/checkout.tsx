@@ -9,6 +9,8 @@ import {
   Modal,
   Alert,
   Share,
+  Linking,
+  Platform,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -69,13 +71,48 @@ export default function CheckoutScreen() {
   };
 
   // Payment Confirmation
-  const handleConfirmPaymentMethod = () => {
+  const handleConfirmPaymentMethod = async () => {
     if (selectedMethod === "qr") {
       setShowQrModal(true);
     } else if (selectedMethod === "bank") {
       setStep("bank_details");
     } else if (selectedMethod === "card") {
       setStep("card_details");
+    } else if (selectedMethod === "esewa") {
+      try {
+        const canOpen = await Linking.canOpenURL("esewa://");
+        if (canOpen) {
+          await Linking.openURL("esewa://");
+        } else {
+          Alert.alert(
+            "eSewa App Not Installed",
+            "The official eSewa mobile app is not installed on this device. Install eSewa or continue?",
+            [
+              {
+                text: "Install eSewa",
+                onPress: () => {
+                  const url =
+                    Platform.OS === "android"
+                      ? "market://details?id=com.f1soft.esewa"
+                      : "https://apps.apple.com/np/app/esewa/id1162483832";
+                  Linking.openURL(url).catch(() => {
+                    Linking.openURL(
+                      "https://play.google.com/store/apps/details?id=com.f1soft.esewa"
+                    );
+                  });
+                },
+              },
+              {
+                text: "Confirm",
+                onPress: () => setShowSuccessModal(true),
+              },
+              { text: "Cancel", style: "cancel" },
+            ]
+          );
+        }
+      } catch {
+        setShowSuccessModal(true);
+      }
     } else {
       setShowSuccessModal(true);
     }

@@ -9,11 +9,7 @@ const getBaseUrl = (): string => {
   if (process.env.EXPO_PUBLIC_API_URL) {
     return process.env.EXPO_PUBLIC_API_URL;
   }
-  if (Platform.OS === "web") {
-    return "http://localhost:5000/api";
-  }
-  // Local network IP address for React Native mobile
-  return "http://192.168.29.235:5000/api";
+  return "https://api.kalkisenadrive.com/api";
 };
 
 export const API_BASE_URL = getBaseUrl();
@@ -31,6 +27,31 @@ export interface ApiResponse<T = any> {
   avatarUrl?: string;
   publicId?: string;
   hasApplication?: boolean;
+  hasPurchased?: boolean;
+  alreadyPurchased?: boolean;
+  gatewayUrl?: string;
+  directBookingUrl?: string;
+  transactionUuid?: string;
+  orderId?: string;
+  refId?: string;
+  status?: string;
+  amount?: number | string;
+  currency?: string;
+  esewaPayload?: any;
+  esewaIntent?: {
+    intentUrl: string;
+    intentV2Url: string;
+    androidPackage: string;
+    iosScheme: string;
+    playStoreUrl: string;
+    marketUrl: string;
+    appStoreUrl: string;
+    totalAmount: string;
+    transactionUuid: string;
+    productCode: string;
+    signature: string;
+    signedFieldNames: string;
+  };
   errors?: Array<{ field: string; message: string }>;
 }
 
@@ -500,6 +521,102 @@ export const apiService = {
       return data;
     } catch (error: any) {
       throw new Error(error.message || "Network error uploading document to Cloudinary");
+    }
+  },
+
+  // -------------------------------------------------------------
+  // eSewa Payment Gateway APIs
+  // -------------------------------------------------------------
+  initiateEsewaPayment: async (
+    payload: {
+      bookAppearance?: "physical" | "digital";
+      pickupLocation?: string;
+    },
+    token?: string | null
+  ): Promise<ApiResponse> => {
+    try {
+      const headers = await getAuthHeaders(token);
+      const response = await fetch(`${API_BASE_URL}/payments/esewa/initiate`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to initiate eSewa payment");
+      }
+      return data;
+    } catch (error: any) {
+      throw new Error(error.message || "Network error initiating eSewa payment");
+    }
+  },
+
+  verifyEsewaPayment: async (
+    payload: {
+      transactionUuid: string;
+      encodedData?: string;
+      refId?: string;
+      status?: string;
+      failure?: boolean;
+      message?: string;
+    },
+    token?: string | null
+  ): Promise<ApiResponse> => {
+    try {
+      const headers = await getAuthHeaders(token);
+      const response = await fetch(`${API_BASE_URL}/payments/esewa/verify`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || "Payment verification failed with eSewa");
+      }
+      return data;
+    } catch (error: any) {
+      throw new Error(error.message || "Network error verifying payment with eSewa");
+    }
+  },
+
+  getOrderPaymentStatus: async (
+    orderId: string,
+    token?: string | null
+  ): Promise<ApiResponse> => {
+    try {
+      const headers = await getAuthHeaders(token);
+      const response = await fetch(
+        `${API_BASE_URL}/payments/orders/${encodeURIComponent(orderId)}/status`,
+        {
+          method: "GET",
+          headers,
+        }
+      );
+      return await response.json();
+    } catch (error: any) {
+      throw new Error(error.message || "Failed to get payment status");
+    }
+  },
+
+  getMyPurchaseStatus: async (token?: string | null): Promise<ApiResponse> => {
+    try {
+      const headers = await getAuthHeaders(token);
+      const response = await fetch(`${API_BASE_URL}/books/my-purchase`, {
+        method: "GET",
+        headers,
+      });
+      return await response.json();
+    } catch (error: any) {
+      throw new Error(error.message || "Failed to check book purchase status");
+    }
+  },
+
+  getFeaturedBook: async (): Promise<ApiResponse> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/books/featured`);
+      return await response.json();
+    } catch (error: any) {
+      throw new Error(error.message || "Failed to fetch featured book");
     }
   },
 };

@@ -10,7 +10,12 @@
     "ios": {
       "bundleIdentifier": "com.agileapp977.kalkisenadrive",
       "googleServicesFile": "./GoogleService-Info.plist",
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "infoPlist": {
+        "LSApplicationQueriesSchemes": [
+          "esewa"
+        ]
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -55,7 +60,8 @@
           "iosUrlScheme": "com.googleusercontent.apps.284669757325-vr2oqodqkpk2tpb0u46nvb09plbriuq5"
         }
       ],
-      "expo-video"
+      "expo-video",
+      "./plugins/withEsewaIntent.js"
     ],
     "experiments": {
       "typedRoutes": true,

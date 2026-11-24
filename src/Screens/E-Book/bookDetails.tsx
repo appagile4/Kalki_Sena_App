@@ -3,9 +3,14 @@ import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import React, { useState } from "react";
+import * as WebBrowser from "expo-web-browser";
+import React, { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
+  AppState,
+  AppStateStatus,
+  Linking,
   Modal,
   ScrollView,
   Share,
@@ -18,6 +23,9 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BranchClinic, BranchMapView } from "../../components/BranchMapView";
 import { apiService } from "../../services/api";
+import { secureStorage } from "../../services/secureStorage";
+
+WebBrowser.maybeCompleteAuthSession();
 
 type TabType = "About" | "Chapters" | "Reviews";
 type BookAppearance = "physical" | "digital";
@@ -46,6 +54,45 @@ export default function BookDetailsScreen() {
     useState<BookAppearance>("digital");
   const [selectedPickup, setSelectedPickup] = useState<string>("clinic_1");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("esewa");
+
+  // Verified eSewa Payment & Ownership State
+  const [isProcessingPayment, setIsProcessingPayment] =
+    useState<boolean>(false);
+  const [verifiedOrderId, setVerifiedOrderId] = useState<string>("");
+  const [verifiedRefId, setVerifiedRefId] = useState<string>("");
+  const [userHasPurchased, setUserHasPurchased] = useState<boolean>(false);
+  const activeTxnUuidRef = useRef<string | null>(null);
+
+  // Background/Foreground resumption listener to auto-verify status when returning from eSewa mobile app
+  useEffect(() => {
+    const handleAppStateChange = async (nextAppState: AppStateStatus) => {
+      if (
+        nextAppState === "active" &&
+        activeTxnUuidRef.current &&
+        !userHasPurchased
+      ) {
+        try {
+          const verifyRes = await apiService.verifyEsewaPayment({
+            transactionUuid: activeTxnUuidRef.current,
+          });
+          if (verifyRes && verifyRes.success) {
+            setVerifiedOrderId(verifyRes.orderId || "");
+            setVerifiedRefId(verifyRes.refId || "VERIFIED");
+            setUserHasPurchased(true);
+            setShowSuccessModal(true);
+            activeTxnUuidRef.current = null;
+          }
+        } catch {
+          // If transaction is still awaiting confirmation or user toggled apps, no crash
+        }
+      }
+    };
+
+    const sub = AppState.addEventListener("change", handleAppStateChange);
+    return () => {
+      sub.remove();
+    };
+  }, [userHasPurchased]);
 
   // Bank Form State
   const [accountHolder, setAccountHolder] = useState("");
@@ -120,12 +167,27 @@ export default function BookDetailsScreen() {
 
   React.useEffect(() => {
     fetchLiveBook();
-    // Real-time synchronization polling every 3 seconds
+    checkUserOwnership();
+    // Real-time synchronization polling every 5 seconds
     const interval = setInterval(() => {
       fetchLiveBook();
-    }, 3000);
+    }, 5000);
     return () => clearInterval(interval);
   }, []);
+
+  const checkUserOwnership = async () => {
+    try {
+      const token = await secureStorage.getAccessToken();
+      if (token) {
+        const purchaseRes = await apiService.getMyPurchaseStatus();
+        if (purchaseRes && purchaseRes.hasPurchased) {
+          setUserHasPurchased(true);
+        }
+      }
+    } catch {
+      // offline or unauthenticated
+    }
+  };
 
   // Dynamic Cover Image (Cloudinary or local asset fallback)
   const coverImageSource =
@@ -154,8 +216,62 @@ export default function BookDetailsScreen() {
     );
   };
 
+  // PDF Download Handler
+  const handleDownloadPdf = async () => {
+    const pdfUrl = bookData?.pdfUrl;
+    if (!pdfUrl) {
+      Alert.alert(
+        "PDF Document",
+        "The official digital edition PDF has not been uploaded yet.",
+        [{ text: "OK" }]
+      );
+      return;
+    }
+    try {
+      const canOpen = await Linking.canOpenURL(pdfUrl);
+      if (canOpen) {
+        await Linking.openURL(pdfUrl);
+      } else {
+        await WebBrowser.openBrowserAsync(pdfUrl);
+      }
+    } catch {
+      await WebBrowser.openBrowserAsync(pdfUrl);
+    }
+  };
+
   // Start checkout flow
-  const handleBuyNowPress = () => {
+  const handleBuyNowPress = async () => {
+    if (userHasPurchased) {
+      Alert.alert(
+        "Already Purchased",
+        "You have already purchased this book and have full verified access.",
+        [
+          {
+            text: "Read in My Book",
+            onPress: () => router.push("/Home/mybook" as any),
+          },
+          { text: "Dismiss", style: "cancel" },
+        ],
+      );
+      return;
+    }
+
+    const token = await secureStorage.getAccessToken();
+    if (!token) {
+      Alert.alert(
+        "Login Required",
+        "Please sign in or create an account to purchase this book with eSewa.",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Sign In",
+            onPress: () => router.push("/Auth/login" as any),
+          },
+        ],
+      );
+      return;
+    }
+
     setShowAppearanceModal(true);
   };
 
@@ -169,55 +285,309 @@ export default function BookDetailsScreen() {
     }
   };
 
-  // Complete Payment
-  const handleCompletePayment = async () => {
-    try {
-      const clinicMap: Record<string, string> = {
-        clinic_1: "Kalki Clinic - Baneshwor Branch",
-        clinic_2: "Kalki Sena Clinic - Baneshwor Branch",
-        clinic_3: "Kalki Clinic - Maitighar Branch",
-      };
+  // Complete Payment (eSewa Native/Web Intent or Bank Transfer)
+  // const handleCompletePayment = async () => {
+  //   const clinicMap: Record<string, string> = {
+  //     clinic_1: "Kalki Clinic - Baneshwor Branch",
+  //     clinic_2: "Kalki Sena Clinic - Baneshwor Branch",
+  //     clinic_3: "Kalki Clinic - Maitighar Branch",
+  //     clinic_4: "Kalki Clinic - Putalisadak Branch",
+  //     clinic_5: "Kalki Clinic - Jawalakhel Branch",
+  //   };
 
-      if (bookData?.pickupClinics) {
-        bookData.pickupClinics.forEach((c: any) => {
-          clinicMap[c.id] = c.name;
-        });
-      }
+  //   if (bookData?.pickupClinics) {
+  //     bookData.pickupClinics.forEach((c: any) => {
+  //       clinicMap[c.id] = c.name;
+  //     });
+  //   }
 
-      const payload = {
-        customerName: "Kalki App Reader",
-        bookAppearance,
-        pickupLocation:
-          bookAppearance === "physical"
-            ? clinicMap[selectedPickup] ||
-              selectedPickup ||
-              "Kalki Clinic - Baneshwor Branch"
-            : "Digital In-App Access",
-        paymentMethod,
-        bankDetails:
-          paymentMethod === "bank"
-            ? {
-                accountHolder,
-                accountNumber,
-                branchName,
-                ifscCode,
-              }
-            : undefined,
-        amount: bookData?.price || 1000,
-        currency: bookData?.currency || "NPR",
-      };
+  //   const pickupLocation =
+  //     bookAppearance === "physical"
+  //       ? clinicMap[selectedPickup] ||
+  //         selectedPickup ||
+  //         "Kalki Clinic - Baneshwor Branch"
+  //       : "Digital In-App Access";
 
-      await apiService.createBookOrder(payload);
-    } catch (e) {
-      console.log("Book order submission error:", e);
-    }
-    setShowSuccessModal(true);
+  //   // 1. Official eSewa Native Gateway Flow (Direct App-to-App Intent)
+  //   if (paymentMethod === "esewa") {
+  //     try {
+  //       const token = await secureStorage.getAccessToken();
+  //       if (!token) {
+  //         Alert.alert(
+  //           "Login Required",
+  //           "Please sign in before completing your eSewa purchase.",
+  //           [
+  //             { text: "Cancel", style: "cancel" },
+  //             {
+  //               text: "Sign In",
+  //               onPress: () => router.push("/Auth/login" as any),
+  //             },
+  //           ]
+  //         );
+  //         return;
+  //       }
+
+  //       setIsProcessingPayment(true);
+
+  //       // A. Backend initiates pending order, pending payment, and returns signed eSewa payload
+  //       const initRes = await apiService.initiateEsewaPayment({
+  //         bookAppearance,
+  //         pickupLocation,
+  //       });
+
+  //       if (!initRes || !initRes.success) {
+  //         if (initRes?.alreadyPurchased) {
+  //           Alert.alert(
+  //             "Already Owned",
+  //             "You already have verified digital access to this book.",
+  //             [
+  //               {
+  //                 text: "Go to My Book",
+  //                 onPress: () => router.push("/Home/mybook" as any),
+  //               },
+  //               { text: "OK", style: "cancel" },
+  //             ]
+  //           );
+  //           return;
+  //         }
+  //         throw new Error(initRes?.message || "Failed to initiate eSewa payment");
+  //       }
+
+  //       const gatewayUrl =
+  //         initRes.directBookingUrl || initRes.gatewayUrl || "";
+  //       const txnUuid = initRes.transactionUuid || "";
+  //       if (!txnUuid) {
+  //         throw new Error("Invalid payment gateway response from server.");
+  //       }
+
+  //       // Store active transaction for background/foreground resumption checks
+  //       activeTxnUuidRef.current = txnUuid;
+
+  //       const amountVal = initRes.amount || initRes.esewaIntent?.totalAmount || "1000";
+  //       const intentUrl =
+  //         initRes.esewaIntent?.intentUrl ||
+  //         `esewa://ea?amt=${amountVal}&txAmt=0&psc=0&pdc=0&scd=EPAYTEST&pid=${txnUuid}&su=${encodeURIComponent("kalkisenadrive://payment-success")}&fu=${encodeURIComponent("kalkisenadrive://payment-failure")}`;
+  //       const intentV2Url = initRes.esewaIntent?.intentV2Url;
+  //       const marketUrl =
+  //         initRes.esewaIntent?.marketUrl || "market://details?id=com.f1soft.esewa";
+  //       const appStoreUrl =
+  //         initRes.esewaIntent?.appStoreUrl || "https://apps.apple.com/np/app/esewa/id1162483832";
+  //       const playStoreUrl =
+  //         initRes.esewaIntent?.playStoreUrl || "https://play.google.com/store/apps/details?id=com.f1soft.esewa";
+
+  //       // B. Check if native eSewa application is installed on device
+  //       let isAppInstalled = false;
+  //       try {
+  //         isAppInstalled = await Linking.canOpenURL("esewa://");
+  //       } catch {
+  //         isAppInstalled = false;
+  //       }
+
+  //       // Helper to run web checkout fallback
+  //       const executeWebCheckout = async () => {
+  //         try {
+  //           setIsProcessingPayment(true);
+  //           const returnUrl = "kalkisenadrive://payment-success";
+  //           const webResult = await WebBrowser.openAuthSessionAsync(
+  //             gatewayUrl,
+  //             returnUrl
+  //           );
+
+  //           if (webResult.type === "success" && webResult.url) {
+  //             const parsed = Linking.parse(webResult.url);
+  //             const encodedData = (parsed.queryParams?.data as string) || undefined;
+  //             const refId =
+  //               (parsed.queryParams?.refId as string) ||
+  //               (parsed.queryParams?.transaction_code as string) ||
+  //               undefined;
+
+  //             // Server-side verification
+  //             const verifyRes = await apiService.verifyEsewaPayment({
+  //               transactionUuid: txnUuid,
+  //               encodedData,
+  //               refId,
+  //             });
+
+  //             if (verifyRes && verifyRes.success) {
+  //               activeTxnUuidRef.current = null;
+  //               setVerifiedOrderId(verifyRes.orderId || initRes.orderId || "");
+  //               setVerifiedRefId(verifyRes.refId || refId || "VERIFIED");
+  //               setUserHasPurchased(true);
+  //               setShowSuccessModal(true);
+  //             } else {
+  //               Alert.alert(
+  //                 "eSewa Status Notice",
+  //                 verifyRes?.message ||
+  //                   "Payment was submitted but is currently awaiting gateway confirmation."
+  //               );
+  //             }
+  //           } else if (webResult.type === "cancel" || webResult.type === "dismiss") {
+  //             await apiService
+  //               .verifyEsewaPayment({
+  //                 transactionUuid: txnUuid,
+  //                 failure: true,
+  //                 status: "cancelled",
+  //                 message: "User closed eSewa gateway before completion",
+  //               })
+  //               .catch(() => {});
+  //             Alert.alert("Payment Cancelled", "eSewa payment window was closed.");
+  //           }
+  //         } catch (e: any) {
+  //           Alert.alert("Payment Error", e.message || "Failed to complete eSewa web checkout.");
+  //         } finally {
+  //           setIsProcessingPayment(false);
+  //         }
+  //       };
+
+  //       if (isAppInstalled) {
+  //         // DIRECT APP-TO-APP PAYMENT: Launch installed eSewa app directly
+  //         try {
+  //           // Register deep link listener for return from eSewa app
+  //           const sub = Linking.addEventListener("url", async (event) => {
+  //             if (event.url.includes("payment-success") || event.url.includes("data=")) {
+  //               sub.remove();
+  //               const parsed = Linking.parse(event.url);
+  //               const encodedData = (parsed.queryParams?.data as string) || undefined;
+  //               const refId =
+  //                 (parsed.queryParams?.refId as string) ||
+  //                 (parsed.queryParams?.transaction_code as string) ||
+  //                 undefined;
+
+  //               const verifyRes = await apiService.verifyEsewaPayment({
+  //                 transactionUuid: txnUuid,
+  //                 encodedData,
+  //                 refId,
+  //               });
+
+  //               if (verifyRes && verifyRes.success) {
+  //                 activeTxnUuidRef.current = null;
+  //                 setVerifiedOrderId(verifyRes.orderId || initRes.orderId || "");
+  //                 setVerifiedRefId(verifyRes.refId || refId || "VERIFIED");
+  //                 setUserHasPurchased(true);
+  //                 setShowSuccessModal(true);
+  //               }
+  //             } else if (event.url.includes("payment-failure")) {
+  //               sub.remove();
+  //               await apiService
+  //                 .verifyEsewaPayment({
+  //                   transactionUuid: txnUuid,
+  //                   failure: true,
+  //                   status: "cancelled",
+  //                   message: "Payment cancelled in eSewa mobile app",
+  //                 })
+  //                 .catch(() => {});
+  //               Alert.alert("Payment Cancelled", "eSewa mobile transaction was cancelled.");
+  //             }
+  //           });
+
+  //           // Open official eSewa mobile app directly via Native Intent
+  //           await Linking.openURL(intentUrl);
+  //         } catch (err: any) {
+  //           // If primary intent URL fails, try v2 intent URL
+  //           if (intentV2Url) {
+  //             try {
+  //               await Linking.openURL(intentV2Url);
+  //             } catch {
+  //               // If direct intent failed, fallback to web
+  //               await executeWebCheckout();
+  //             }
+  //           } else {
+  //             await executeWebCheckout();
+  //           }
+  //         }
+  //       } else {
+  //         // eSewa app is not installed: prompt user with choices
+  //         Alert.alert(
+  //           "eSewa App Not Installed",
+  //           "The official eSewa mobile app was not detected on your device. Would you like to install eSewa from the app store for direct app payment, or continue via eSewa Web?",
+  //           [
+  //             {
+  //               text: "Install eSewa",
+  //               onPress: () => {
+  //                 const targetStore =
+  //                   Platform.OS === "android" ? marketUrl : appStoreUrl;
+  //                 Linking.openURL(targetStore).catch(() => {
+  //                   Linking.openURL(playStoreUrl);
+  //                 });
+  //               },
+  //             },
+  //             {
+  //               text: "Pay via Web",
+  //               onPress: executeWebCheckout,
+  //             },
+  //             {
+  //               text: "Cancel",
+  //               style: "cancel",
+  //               onPress: () => {
+  //                 apiService
+  //                   .verifyEsewaPayment({
+  //                     transactionUuid: txnUuid,
+  //                     failure: true,
+  //                     status: "cancelled",
+  //                     message: "User declined to install eSewa or pay via web",
+  //                   })
+  //                   .catch(() => {});
+  //               },
+  //             },
+  //           ]
+  //         );
+  //       }
+  //     } catch (error: any) {
+  //       Alert.alert(
+  //         "Payment Failed",
+  //         error.message || "Failed to process eSewa payment. Please try again."
+  //       );
+  //     } finally {
+  //       setIsProcessingPayment(false);
+  //     }
+  //     return;
+  //   }
+
+  //   // 2. Bank transfer or alternate flow fallback
+  //   try {
+  //     setIsProcessingPayment(true);
+  //     const payload = {
+  //       customerName: "Kalki App Reader",
+  //       bookAppearance,
+  //       pickupLocation,
+  //       paymentMethod,
+  //       bankDetails:
+  //         paymentMethod === "bank"
+  //           ? {
+  //               accountHolder,
+  //               accountNumber,
+  //               branchName,
+  //               ifscCode,
+  //             }
+  //           : undefined,
+  //       amount: bookData?.price || 1000,
+  //       currency: bookData?.currency || "NPR",
+  //     };
+
+  //     const res = await apiService.createBookOrder(payload);
+  //     setVerifiedOrderId(res?.data?.orderId || `KS-${Date.now()}`);
+  //     setVerifiedRefId(`BANK-${Date.now().toString().slice(-6)}`);
+  //     setShowSuccessModal(true);
+  //   } catch (e: any) {
+  //     Alert.alert("Order Error", e.message || "Failed to place order.");
+  //   } finally {
+  //     setIsProcessingPayment(false);
+  //   }
+  // };
+
+  const handleCompletePayment = () => {
+    Alert.alert("Coming Soon", "Buying book coming soon.", [{ text: "OK" }]);
   };
 
-  // Finish and return Home
+  // Finish and return Home or My Book
   const handleSuccessBackHome = () => {
     setShowSuccessModal(false);
     router.replace("/Home" as any);
+  };
+
+  const handleSuccessGoToMyBook = () => {
+    setShowSuccessModal(false);
+    router.replace("/Home/mybook" as any);
   };
 
   // -------------------------------------------------------------
@@ -738,17 +1108,44 @@ export default function BookDetailsScreen() {
 
           {/* Pay Now Button */}
           <TouchableOpacity
-            style={[styles.primaryActionButton, { marginTop: 28 }]}
+            style={[
+              styles.primaryActionButton,
+              { marginTop: 28 },
+              isProcessingPayment && { opacity: 0.7 },
+            ]}
+            disabled={isProcessingPayment}
             activeOpacity={0.85}
-            onPress={() => {
-              if (paymentMethod === "bank") {
-                setCurrentStep("bank_form");
-              } else {
-                handleCompletePayment();
-              }
-            }}
+            onPress={
+              handleCompletePayment
+
+              //   {
+              //   if (paymentMethod === "bank") {
+              //     setCurrentStep("bank_form");
+              //   } else {
+              //     handleCompletePayment();
+              //   }
+              // }
+            }
           >
-            <Text style={styles.primaryActionButtonText}>Pay Now</Text>
+            {isProcessingPayment ? (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 10,
+                }}
+              >
+                <ActivityIndicator color="#FFFFFF" size="small" />
+                <Text style={styles.primaryActionButtonText}>
+                  Connecting to eSewa...
+                </Text>
+              </View>
+            ) : (
+              <Text style={styles.primaryActionButtonText}>
+                {paymentMethod === "esewa" ? "Pay with eSewa" : "Pay Now"}
+              </Text>
+            )}
           </TouchableOpacity>
         </ScrollView>
 
@@ -780,29 +1177,105 @@ export default function BookDetailsScreen() {
             </TouchableOpacity>
 
             {/* Checkmark Badge */}
-            <View style={styles.successBadge}>
+            <View style={[styles.successBadge, { backgroundColor: "#60BB46" }]}>
               <Ionicons name="checkmark" size={36} color="#FFFFFF" />
             </View>
 
-            <Text style={styles.successTitle}>Payment Successful</Text>
+            <Text style={styles.successTitle}>Payment Verified</Text>
             <Text style={styles.successSubtitle}>
-              Your money has been paid successfully
+              Your eSewa transaction has been verified successfully.
             </Text>
 
-            <View style={styles.successAmountBox}>
-              <Text style={styles.successAmountLabel}>Amount paid</Text>
-              <Text style={styles.successAmountValue}>
-                {bookData?.currency || "NPR"}{" "}
-                {bookData?.price ? bookData.price.toLocaleString() : "1000"}
-              </Text>
+            <View
+              style={{
+                width: "100%",
+                backgroundColor: "#F7FAFC",
+                borderRadius: 10,
+                padding: 12,
+                marginBottom: 18,
+              }}
+            >
+              {verifiedOrderId ? (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    marginBottom: 6,
+                  }}
+                >
+                  <Text style={{ fontSize: 12, color: "#718096" }}>
+                    Order ID
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: "600",
+                      color: "#1A202C",
+                    }}
+                  >
+                    {verifiedOrderId}
+                  </Text>
+                </View>
+              ) : null}
+              {verifiedRefId ? (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    marginBottom: 6,
+                  }}
+                >
+                  <Text style={{ fontSize: 12, color: "#718096" }}>
+                    eSewa Ref ID
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: "700",
+                      color: "#60BB46",
+                    }}
+                  >
+                    {verifiedRefId}
+                  </Text>
+                </View>
+              ) : null}
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                }}
+              >
+                <Text style={{ fontSize: 12, color: "#718096" }}>
+                  Amount Paid
+                </Text>
+                <Text
+                  style={{ fontSize: 13, fontWeight: "800", color: "#1A202C" }}
+                >
+                  {bookData?.currency || "NPR"}{" "}
+                  {bookData?.price ? bookData.price.toLocaleString() : "1,000"}
+                </Text>
+              </View>
             </View>
 
             <TouchableOpacity
-              style={styles.successButton}
+              style={[
+                styles.successButton,
+                { backgroundColor: "#10B981", marginBottom: 10 },
+              ]}
+              activeOpacity={0.85}
+              onPress={handleSuccessGoToMyBook}
+            >
+              <Text style={styles.successButtonText}>Read in My Book</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.successButton, { backgroundColor: "#EDF2F7" }]}
               activeOpacity={0.85}
               onPress={handleSuccessBackHome}
             >
-              <Text style={styles.successButtonText}>Back Home</Text>
+              <Text style={[styles.successButtonText, { color: "#4A5568" }]}>
+                Back Home
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -958,6 +1431,34 @@ export default function BookDetailsScreen() {
           </View>
         </View>
 
+        {/* PDF Digital Edition Download Banner */}
+        {bookData?.pdfUrl ? (
+          <View style={styles.pdfDownloadBanner}>
+            <View style={styles.pdfIconBox}>
+              <Ionicons name="document-text" size={22} color="#EF4444" />
+            </View>
+            <View style={styles.pdfInfoCol}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Text style={styles.pdfBannerTitle}>Digital Edition PDF</Text>
+                <View style={styles.pdfPill}>
+                  <Text style={styles.pdfPillText}>PDF</Text>
+                </View>
+              </View>
+              <Text style={styles.pdfBannerSubtext} numberOfLines={1}>
+                {bookData.pdfFileName || "Economic_Revolution_to_make_Nepal_A_World_Leader.pdf"}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.pdfDownloadBtn}
+              activeOpacity={0.8}
+              onPress={handleDownloadPdf}
+            >
+              <Ionicons name="download-outline" size={15} color="#FFFFFF" />
+              <Text style={styles.pdfDownloadBtnText}>Download</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
         {/* 4. Tabs Row */}
         <View style={styles.tabsRow}>
           {(["About", "Chapters", "Reviews"] as TabType[]).map((tab) => {
@@ -1004,43 +1505,80 @@ export default function BookDetailsScreen() {
 
         {activeTab === "Chapters" && (
           <View style={styles.tabContentContainer}>
+            <View style={styles.chaptersIntroRow}>
+              <Text style={styles.sectionHeading}>
+                Book Chapters ({bookData?.chapters?.length || 3})
+              </Text>
+              <Text style={styles.chaptersSubheading}>
+                Preview excerpts from the book
+              </Text>
+            </View>
+
             {(bookData?.chapters && bookData.chapters.length > 0
-              ? bookData.chapters
+              ? bookData.chapters.slice(0, 3)
               : [
                   {
                     chapterNumber: 1,
                     title: "Chapter 1 | The Hope",
                     pageRange: "Page No: 12 - 50",
                     excerpt:
-                      "The fundamental vision behind mobilization of youth and education reforms to foster nationwide innovation.",
+                      "The fundamental blueprint for youth mobilization and nationwide education reform to foster homegrown innovation and self-reliance across Nepal.",
                   },
                   {
                     chapterNumber: 2,
                     title: "Chapter 2 | The Vision & Policy",
                     pageRange: "Page No: 51 - 98",
                     excerpt:
-                      "Detailed framework on monetary policies, healthcare infrastructure, and employment generation for 1,000+ teachers.",
+                      "Comprehensive architecture on monetary policies, healthcare infrastructure, free public legal aid, and generating 100,000+ skilled employment opportunities.",
                   },
                   {
                     chapterNumber: 3,
                     title: "Chapter 3 | Economic Revolution",
                     pageRange: "Page No: 99 - 145",
                     excerpt:
-                      "The strategic roadmap towards making Nepal economically self-reliant and a global leader through Gen Z unity.",
+                      "The strategic masterplan towards making Nepal economically sovereign, eliminating foreign debt dependency, and establishing a Gen Z-led economic wave.",
                   },
                 ]
-            ).map((ch: any, idx: number, arr: any[]) => (
-              <React.Fragment key={idx}>
-                <View style={styles.chapterItem}>
-                  <View style={styles.chapterHeaderRow}>
+            ).map((ch: any, idx: number) => (
+              <View key={idx} style={styles.chapterCard}>
+                <View style={styles.chapterHeaderRow}>
+                  <View style={styles.chapterNumBadge}>
+                    <Text style={styles.chapterNumText}>0{idx + 1}</Text>
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 10 }}>
                     <Text style={styles.chapterTitle}>{ch.title}</Text>
                     <Text style={styles.chapterPageInfo}>{ch.pageRange}</Text>
                   </View>
-                  <Text style={styles.chapterExcerpt}>{ch.excerpt}</Text>
                 </View>
-                {idx < arr.length - 1 && <View style={styles.tabSeparator} />}
-              </React.Fragment>
+
+                {/* Excerpt lines */}
+                {ch.excerpt ? (
+                  <View style={styles.chapterExcerptBox}>
+                    <View style={styles.excerptLabelRow}>
+                      <Ionicons name="book-outline" size={13} color="#38BDF8" />
+                      <Text style={styles.excerptLabel}>Chapter Preview Lines</Text>
+                    </View>
+                    <Text style={styles.chapterExcerpt}>
+                      &ldquo;{ch.excerpt}&rdquo;
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
             ))}
+
+            {/* Download PDF Option inside Chapters */}
+            {bookData?.pdfUrl ? (
+              <TouchableOpacity
+                style={styles.chapterDownloadPdfBtn}
+                activeOpacity={0.85}
+                onPress={handleDownloadPdf}
+              >
+                <Ionicons name="cloud-download-outline" size={18} color="#FFFFFF" />
+                <Text style={styles.chapterDownloadPdfBtnText}>
+                  Download Full Book PDF (3 Chapters)
+                </Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
         )}
 
@@ -1097,7 +1635,27 @@ export default function BookDetailsScreen() {
           { paddingBottom: Math.max(insets.bottom, 14) + 6 },
         ]}
       >
-        {activeTab === "About" ? (
+        {userHasPurchased ? (
+          <TouchableOpacity
+            style={[
+              styles.fullContinueButton,
+              {
+                backgroundColor: "#10B981",
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+              },
+            ]}
+            activeOpacity={0.85}
+            onPress={() => router.push("/Home/mybook" as any)}
+          >
+            <Ionicons name="book-outline" size={20} color="#FFFFFF" />
+            <Text style={styles.fullContinueButtonText}>
+              Verified Owner • Read in My Book
+            </Text>
+          </TouchableOpacity>
+        ) : activeTab === "About" ? (
           <View style={styles.aboutActionBarRow}>
             <View style={styles.priceContainer}>
               <Text style={styles.priceLabel}>Price</Text>
@@ -1504,6 +2062,135 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: "#0F2644",
     marginVertical: 14,
+  },
+
+  // PDF Download Banner
+  pdfDownloadBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(11, 30, 56, 0.85)",
+    borderWidth: 1,
+    borderColor: "rgba(56, 189, 248, 0.25)",
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginTop: 14,
+  },
+  pdfIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: "rgba(239, 68, 68, 0.15)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pdfInfoCol: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  pdfBannerTitle: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  pdfPill: {
+    backgroundColor: "rgba(239, 68, 68, 0.25)",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  pdfPillText: {
+    color: "#FCA5A5",
+    fontSize: 9.5,
+    fontWeight: "800",
+  },
+  pdfBannerSubtext: {
+    color: "#7A8D9E",
+    fontSize: 11,
+    marginTop: 2,
+  },
+  pdfDownloadBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#EF4444",
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  pdfDownloadBtnText: {
+    color: "#FFFFFF",
+    fontSize: 11.5,
+    fontWeight: "700",
+  },
+
+  // Chapters tab enhanced
+  chaptersIntroRow: {
+    marginBottom: 12,
+  },
+  chaptersSubheading: {
+    color: "#7A8D9E",
+    fontSize: 11.5,
+    marginTop: 2,
+  },
+  chapterCard: {
+    backgroundColor: "rgba(11, 30, 56, 0.65)",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.08)",
+    padding: 14,
+    marginBottom: 12,
+  },
+  chapterNumBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: "rgba(56, 189, 248, 0.15)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  chapterNumText: {
+    color: "#38BDF8",
+    fontSize: 12,
+    fontWeight: "800",
+    fontFamily: "monospace",
+  },
+  chapterExcerptBox: {
+    marginTop: 10,
+    padding: 10,
+    backgroundColor: "rgba(2, 22, 49, 0.8)",
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: "#38BDF8",
+  },
+  excerptLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginBottom: 4,
+  },
+  excerptLabel: {
+    color: "#38BDF8",
+    fontSize: 10.5,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  chapterDownloadPdfBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#0266B3",
+    borderRadius: 12,
+    paddingVertical: 14,
+    marginTop: 6,
+    marginBottom: 10,
+  },
+  chapterDownloadPdfBtnText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "700",
   },
 
   // Chapters tab
