@@ -1,5 +1,4 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Image } from "expo-image";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Linking,
@@ -10,13 +9,11 @@ import {
   View,
 } from "react-native";
 
-// Safe dynamic check for react-native-maps so top-level evaluation NEVER crashes
-// when running in Expo Go or clients without RNMapsAirModule compiled in native binary.
+// Safe dynamic check for react-native-maps
 let MapViewComponent: any = null;
 let MarkerComponent: any = null;
 let PolylineComponent: any = null;
 let CalloutComponent: any = null;
-let PROVIDER_GOOGLE: any = null;
 let isNativeMapsAvailable = false;
 
 try {
@@ -26,11 +23,9 @@ try {
     MarkerComponent = Maps.Marker;
     PolylineComponent = Maps.Polyline;
     CalloutComponent = Maps.Callout;
-    PROVIDER_GOOGLE = Maps.PROVIDER_GOOGLE;
     isNativeMapsAvailable = true;
   }
 } catch {
-  // react-native-maps native binary (RNMapsAirModule) not registered in current client
   isNativeMapsAvailable = false;
 }
 
@@ -55,7 +50,7 @@ interface BranchMapViewProps {
   onOpenDirections?: (clinic: BranchClinic) => void;
 }
 
-// Dark Sci-Fi / Modern Google Map Style matching Kalki Sena branding (#04142a)
+// Dark Map Style matching Kalki Sena branding
 const DARK_MAP_STYLE = [
   { elementType: "geometry", stylers: [{ color: "#061830" }] },
   { elementType: "labels.text.fill", stylers: [{ color: "#8fa8c6" }] },
@@ -126,7 +121,6 @@ export const BranchMapView: React.FC<BranchMapViewProps> = ({
 }) => {
   const mapRef = useRef<any>(null);
   const [mapReady, setMapReady] = useState(false);
-  const [staticMapFailed, setStaticMapFailed] = useState(false);
 
   // Selected clinic object
   const activeClinic =
@@ -139,7 +133,7 @@ export const BranchMapView: React.FC<BranchMapViewProps> = ({
         latitude: 27.6915,
         longitude: 85.342,
       },
-    [userLocation],
+    [userLocation]
   );
 
   // Calculate Distance (Haversine formula) in kilometers
@@ -147,7 +141,7 @@ export const BranchMapView: React.FC<BranchMapViewProps> = ({
     lat1: number,
     lon1: number,
     lat2: number,
-    lon2: number,
+    lon2: number
   ): number => {
     const R = 6371;
     const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -167,7 +161,7 @@ export const BranchMapView: React.FC<BranchMapViewProps> = ({
         effectiveUserLoc.latitude,
         effectiveUserLoc.longitude,
         activeClinic.latitude,
-        activeClinic.longitude,
+        activeClinic.longitude
       )
     : 1.2;
 
@@ -227,14 +221,14 @@ export const BranchMapView: React.FC<BranchMapViewProps> = ({
           longitude: (effectiveUserLoc.longitude + activeClinic.longitude) / 2,
           latitudeDelta: Math.max(
             0.03,
-            Math.abs(effectiveUserLoc.latitude - activeClinic.latitude) * 1.8,
+            Math.abs(effectiveUserLoc.latitude - activeClinic.latitude) * 1.8
           ),
           longitudeDelta: Math.max(
             0.03,
-            Math.abs(effectiveUserLoc.longitude - activeClinic.longitude) * 1.8,
+            Math.abs(effectiveUserLoc.longitude - activeClinic.longitude) * 1.8
           ),
         },
-        700,
+        700
       );
     }
   }, [selectedClinicId, effectiveUserLoc, mapReady, activeClinic]);
@@ -256,26 +250,66 @@ export const BranchMapView: React.FC<BranchMapViewProps> = ({
         {
           edgePadding: { top: 70, right: 60, bottom: 70, left: 60 },
           animated: true,
-        },
+        }
       );
     }
   };
 
-  // Open external turn-by-turn navigation (Google Maps / Apple Maps)
+  /**
+   * Redirect to Google Maps App / Web (No API key required)
+   */
+  const openInGoogleMaps = (clinic?: BranchClinic) => {
+    const target = clinic || activeClinic;
+    if (!target) return;
+    const uLat = effectiveUserLoc.latitude;
+    const uLng = effectiveUserLoc.longitude;
+    const dLat = target.latitude;
+    const dLng = target.longitude;
+
+    const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${uLat},${uLng}&destination=${dLat},${dLng}&travelmode=driving`;
+    Linking.openURL(googleMapsUrl).catch(() => {
+      Linking.openURL(
+        `https://www.google.com/maps/search/?api=1&query=${dLat},${dLng}`
+      ).catch(() => {});
+    });
+  };
+
+  /**
+   * Redirect to Apple Maps App on iOS / Web (No API key required)
+   */
+  const openInAppleMaps = (clinic?: BranchClinic) => {
+    const target = clinic || activeClinic;
+    if (!target) return;
+    const uLat = effectiveUserLoc.latitude;
+    const uLng = effectiveUserLoc.longitude;
+    const dLat = target.latitude;
+    const dLng = target.longitude;
+
+    const appleMapsUrl = `https://maps.apple.com/?saddr=${uLat},${uLng}&daddr=${dLat},${dLng}&dirflg=d&q=${encodeURIComponent(
+      target.name
+    )}`;
+    Linking.openURL(appleMapsUrl).catch(() => {
+      Linking.openURL(
+        `https://maps.apple.com/?ll=${dLat},${dLng}&q=${encodeURIComponent(
+          target.name
+        )}`
+      ).catch(() => {});
+    });
+  };
+
+  // Smart Directions Opener: On iOS defaults to Apple Maps; on Android to Google Maps
   const handleGetDirections = () => {
     if (onOpenDirections && activeClinic) {
       onOpenDirections(activeClinic);
       return;
     }
-
     if (!activeClinic) return;
-    const uLat = effectiveUserLoc.latitude;
-    const uLng = effectiveUserLoc.longitude;
-    const dLat = activeClinic.latitude;
-    const dLng = activeClinic.longitude;
 
-    const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${uLat},${uLng}&destination=${dLat},${dLng}&travelmode=driving`;
-    Linking.openURL(googleMapsUrl).catch(() => {});
+    if (Platform.OS === "ios") {
+      openInAppleMaps(activeClinic);
+    } else {
+      openInGoogleMaps(activeClinic);
+    }
   };
 
   // Dial clinic phone
@@ -284,107 +318,41 @@ export const BranchMapView: React.FC<BranchMapViewProps> = ({
     Linking.openURL(`tel:${phone}`).catch(() => {});
   };
 
-  // Google Maps Static API URL generator
-  const googleApiKey =
-    process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ||
-    "AIzaSyBxnSInFpg3Ds3frC6HUBA9xOyBJ0ftx3U";
+  return (
+    <View style={styles.cardContainer}>
+      {/* 1. Header Bar */}
+      <View style={styles.mapHeaderBar}>
+        <View style={styles.branchStatusBadge}>
+          <View style={styles.livePulseDot} />
+          <Text style={styles.branchStatusText} numberOfLines={1}>
+            {activeClinic ? activeClinic.name : "Kalki Branch"}
+          </Text>
+        </View>
 
-  const staticMapUrl = useMemo(() => {
-    if (!activeClinic) return "";
-    const cLat = (effectiveUserLoc.latitude + activeClinic.latitude) / 2;
-    const cLng = (effectiveUserLoc.longitude + activeClinic.longitude) / 2;
-
-    return `https://maps.googleapis.com/maps/api/staticmap?center=${cLat},${cLng}&zoom=14&size=640x320&scale=2&maptype=roadmap&markers=color:0x00E5FF%7Clabel:U%7C${effectiveUserLoc.latitude},${effectiveUserLoc.longitude}&markers=color:0xFF3B30%7Clabel:B%7C${activeClinic.latitude},${activeClinic.longitude}&path=color:0x00E5FFff%7Cweight:4%7C${effectiveUserLoc.latitude},${effectiveUserLoc.longitude}%7C${activeClinic.latitude},${activeClinic.longitude}&key=${googleApiKey}`;
-  }, [effectiveUserLoc, activeClinic, googleApiKey]);
-
-  // Fallback for Web browser preview
-  if (Platform.OS === "web") {
-    return (
-      <View style={styles.cardContainer}>
-        {/* Header Bar */}
-        <View style={styles.mapHeaderBar}>
-          <View style={styles.branchStatusBadge}>
-            <View style={styles.livePulseDot} />
-            <Text style={styles.branchStatusText}>
-              {activeClinic ? activeClinic.name : "Kalki Branch"}
+        {isNativeMapsAvailable ? (
+          <TouchableOpacity
+            style={styles.recenterButton}
+            onPress={handleRecenter}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="locate" size={12} color="#00E5FF" />
+            <Text style={styles.recenterButtonText}>Recenter</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.coordsBadge}>
+            <Text style={styles.coordsBadgeText}>
+              {activeClinic ? `${activeClinic.latitude.toFixed(3)}°N, ${activeClinic.longitude.toFixed(3)}°E` : "Kathmandu"}
             </Text>
-          </View>
-          <View style={styles.recenterButton}>
-            <Ionicons name="navigate" size={11} color="#00E5FF" />
-            <Text style={styles.recenterButtonText}>Interactive Route</Text>
-          </View>
-        </View>
-
-        {/* Web View Fallback */}
-        <View style={styles.mapViewport}>
-          <iframe
-            src={`https://maps.google.com/maps?q=${
-              activeClinic?.latitude || 27.6915
-            },${activeClinic?.longitude || 85.342}&z=14&output=embed`}
-            style={{ width: "100%", height: "100%", border: "none" }}
-            title="Kalki Sena Branch Map"
-          />
-        </View>
-
-        {/* Directions Footer */}
-        {activeClinic && (
-          <View style={styles.directionFooter}>
-            <View style={styles.directionInfoRow}>
-              <View style={styles.routeIconWrapper}>
-                <Ionicons name="navigate" size={16} color="#00E5FF" />
-              </View>
-              <View style={styles.routeDetails}>
-                <View style={styles.destinationTitleRow}>
-                  <Text style={styles.destinationClinicName} numberOfLines={1}>
-                    {activeClinic.name}
-                  </Text>
-                  <View style={styles.activeTag}>
-                    <Text style={styles.activeTagText}>SELECTED</Text>
-                  </View>
-                </View>
-                <Text style={styles.destinationDistanceText}>
-                  {directDistance} km • ~{estimatedMins} mins drive away
-                </Text>
-                <Text style={styles.destinationAddressText} numberOfLines={1}>
-                  {activeClinic.address || "Kathmandu Valley, Nepal"}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.actionButtonsRow}>
-              <TouchableOpacity
-                style={styles.directionsPrimaryButton}
-                activeOpacity={0.8}
-                onPress={handleGetDirections}
-              >
-                <Ionicons name="arrow-redo" size={15} color="#FFFFFF" />
-                <Text style={styles.directionsPrimaryButtonText}>
-                  Start Navigation
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.callClinicButton}
-                activeOpacity={0.8}
-                onPress={handleCallClinic}
-              >
-                <Ionicons name="call" size={15} color="#00E5FF" />
-              </TouchableOpacity>
-            </View>
           </View>
         )}
       </View>
-    );
-  }
 
-  return (
-    <View style={styles.cardContainer}>
-      {/* Map Viewport: Uses Native MapView if available; otherwise uses high-res Google Maps Static Route View */}
+      {/* 2. Map Viewport: Uses Native MapView (Apple Maps on iOS / System Maps on Android without Google API Key) */}
       <View style={styles.mapViewport}>
         {isNativeMapsAvailable && MapViewComponent ? (
           <MapViewComponent
             ref={mapRef}
             style={StyleSheet.absoluteFill}
-            provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined}
             initialRegion={initialRegion}
             customMapStyle={DARK_MAP_STYLE}
             showsUserLocation={false}
@@ -493,66 +461,106 @@ export const BranchMapView: React.FC<BranchMapViewProps> = ({
                 );
               })}
           </MapViewComponent>
+        ) : Platform.OS === "web" ? (
+          /* Web Map Fallback with free Google embed (no API key required) */
+          <iframe
+            src={`https://maps.google.com/maps?q=${
+              activeClinic?.latitude || 27.6915
+            },${activeClinic?.longitude || 85.342}&z=14&output=embed`}
+            style={{ width: "100%", height: "100%", border: "none" }}
+            title="Kalki Sena Branch Map"
+          />
         ) : (
-          /* High-Resolution Google Maps Static Route View (Zero unlinked native binary crashes) */
-          <View style={StyleSheet.absoluteFill}>
-            <Image
-              source={{ uri: staticMapUrl }}
-              style={StyleSheet.absoluteFill}
-              contentFit="cover"
-              onError={() => setStaticMapFailed(true)}
-            />
-
-            {/* Dark Sci-Fi Overlay Tint */}
-            <View
-              style={[
-                StyleSheet.absoluteFill,
-                { backgroundColor: "rgba(3, 14, 29, 0.25)" },
-              ]}
-              pointerEvents="none"
-            />
-
-            {/* Floating Live Trajectory Badge */}
-            <View style={styles.staticRoutePill}>
-              <View style={styles.staticRoutePillDot} />
-              <Text style={styles.staticRoutePillText}>
-                Route to{" "}
-                {activeClinic?.branch || activeClinic?.name || "Branch"}
-              </Text>
-              <Text style={styles.staticRoutePillKm}>
-                • {directDistance} km
-              </Text>
-            </View>
-
-            {/* Touch overlay: tapping map opens Google Maps directly */}
-            <TouchableOpacity
-              style={StyleSheet.absoluteFill}
-              activeOpacity={0.9}
-              onPress={handleGetDirections}
-            />
-
-            {/* Tap to Navigate Hint */}
-            <View style={styles.tapToNavigatePill} pointerEvents="none">
-              <Ionicons name="map" size={11} color="#00E5FF" />
-              <Text style={styles.tapToNavigatePillText}>
-                Tap map to open in Google Maps
-              </Text>
-            </View>
-
-            {staticMapFailed && (
-              <View style={styles.mapErrorFallback}>
-                <Ionicons name="map-outline" size={32} color="#00E5FF" />
-                <Text style={styles.mapErrorTitle}>
-                  Kathmandu Branch Network
-                </Text>
-                <Text style={styles.mapErrorSub}>
-                  {activeClinic?.name} • {directDistance} km away
-                </Text>
+          /* Elegant Sci-Fi Location Radar Card (Zero external API key dependencies) */
+          <View style={styles.radarContainer}>
+            <View style={styles.radarCircleOuter}>
+              <View style={styles.radarCircleMid}>
+                <View style={styles.radarCircleCenter}>
+                  <Ionicons name="business" size={24} color="#00E5FF" />
+                </View>
               </View>
-            )}
+            </View>
+
+            <View style={styles.radarInfoBadge}>
+              <Text style={styles.radarTitle}>
+                {activeClinic?.name || "Kalki Sena Clinic"}
+              </Text>
+              <Text style={styles.radarSubtitle}>
+                {activeClinic?.address || "Kathmandu Valley, Nepal"}
+              </Text>
+              <View style={styles.radarMetricsRow}>
+                <View style={styles.radarMetricPill}>
+                  <Ionicons name="speedometer-outline" size={11} color="#00E5FF" />
+                  <Text style={styles.radarMetricText}>{directDistance} km away</Text>
+                </View>
+                <View style={styles.radarMetricPill}>
+                  <Ionicons name="time-outline" size={11} color="#38BDF8" />
+                  <Text style={styles.radarMetricText}>~{estimatedMins} min drive</Text>
+                </View>
+              </View>
+            </View>
           </View>
         )}
       </View>
+
+      {/* 3. Action Footer with direct 1-tap Apple Maps & Google Maps Redirects */}
+      {activeClinic && (
+        <View style={styles.directionFooter}>
+          <View style={styles.directionInfoRow}>
+            <View style={styles.routeIconWrapper}>
+              <Ionicons name="navigate" size={16} color="#00E5FF" />
+            </View>
+            <View style={styles.routeDetails}>
+              <View style={styles.destinationTitleRow}>
+                <Text style={styles.destinationClinicName} numberOfLines={1}>
+                  {activeClinic.name}
+                </Text>
+                <View style={styles.activeTag}>
+                  <Text style={styles.activeTagText}>PICKUP POINT</Text>
+                </View>
+              </View>
+              <Text style={styles.destinationDistanceText}>
+                {directDistance} km • ~{estimatedMins} mins drive away
+              </Text>
+              <Text style={styles.destinationAddressText} numberOfLines={1}>
+                {activeClinic.address || "Kathmandu Valley, Nepal"}
+              </Text>
+            </View>
+          </View>
+
+          {/* Quick External Map Redirect Buttons (Google Maps & Apple Maps) */}
+          <View style={styles.actionButtonsRow}>
+            {/* Google Maps Button */}
+            <TouchableOpacity
+              style={styles.googleMapsButton}
+              activeOpacity={0.8}
+              onPress={() => openInGoogleMaps(activeClinic)}
+            >
+              <Ionicons name="map" size={14} color="#00E5FF" />
+              <Text style={styles.googleMapsButtonText}>Google Maps</Text>
+            </TouchableOpacity>
+
+            {/* Apple Maps Button */}
+            <TouchableOpacity
+              style={styles.appleMapsButton}
+              activeOpacity={0.8}
+              onPress={() => openInAppleMaps(activeClinic)}
+            >
+              <Ionicons name="compass" size={14} color="#FFFFFF" />
+              <Text style={styles.appleMapsButtonText}>Apple Maps</Text>
+            </TouchableOpacity>
+
+            {/* Call Clinic Button */}
+            <TouchableOpacity
+              style={styles.callClinicButton}
+              activeOpacity={0.8}
+              onPress={handleCallClinic}
+            >
+              <Ionicons name="call" size={15} color="#00E5FF" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </View>
   );
 };
@@ -615,91 +623,97 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "700",
   },
+  coordsBadge: {
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
+  },
+  coordsBadgeText: {
+    color: "#7A8D9E",
+    fontSize: 9.5,
+    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
+  },
   mapViewport: {
     width: "100%",
-    height: 230,
+    height: 220,
     backgroundColor: "#04142a",
     position: "relative",
   },
 
-  // Static Map Route Pills
-  staticRoutePill: {
-    position: "absolute",
-    top: 10,
-    left: 10,
-    flexDirection: "row",
+  // Fallback Radar Screen
+  radarContainer: {
+    flex: 1,
     alignItems: "center",
-    backgroundColor: "rgba(3, 20, 43, 0.88)",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "rgba(0, 229, 255, 0.4)",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
-    zIndex: 10,
-  },
-  staticRoutePillDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "#00E5FF",
-    marginRight: 6,
-  },
-  staticRoutePillText: {
-    color: "#FFFFFF",
-    fontSize: 11,
-    fontWeight: "700",
-  },
-  staticRoutePillKm: {
-    color: "#00E5FF",
-    fontSize: 11,
-    fontWeight: "700",
-    marginLeft: 4,
-  },
-  tapToNavigatePill: {
-    position: "absolute",
-    bottom: 10,
-    right: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "rgba(3, 20, 43, 0.85)",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: "rgba(0, 229, 255, 0.3)",
-    zIndex: 10,
-  },
-  tapToNavigatePillText: {
-    color: "#CADDF7",
-    fontSize: 10,
-    fontWeight: "600",
-  },
-  mapErrorFallback: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "#051A36",
     justifyContent: "center",
-    alignItems: "center",
-    gap: 6,
+    backgroundColor: "#04142a",
     padding: 16,
   },
-  mapErrorTitle: {
+  radarCircleOuter: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    borderWidth: 1,
+    borderColor: "rgba(0, 229, 255, 0.2)",
+    backgroundColor: "rgba(6, 24, 48, 0.6)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  radarCircleMid: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 1,
+    borderColor: "rgba(0, 229, 255, 0.35)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  radarCircleCenter: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: "rgba(0, 229, 255, 0.15)",
+    borderWidth: 1.5,
+    borderColor: "#00E5FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  radarInfoBadge: {
+    alignItems: "center",
+    marginTop: 10,
+  },
+  radarTitle: {
     color: "#FFFFFF",
     fontSize: 13,
     fontWeight: "700",
   },
-  mapErrorSub: {
+  radarSubtitle: {
     color: "#7A8D9E",
-    fontSize: 11,
+    fontSize: 10.5,
+    marginTop: 2,
+  },
+  radarMetricsRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 6,
+  },
+  radarMetricPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(0, 229, 255, 0.08)",
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "rgba(0, 229, 255, 0.2)",
+  },
+  radarMetricText: {
+    color: "#CADDF7",
+    fontSize: 10,
+    fontWeight: "600",
   },
 
   // User Marker
@@ -892,29 +906,45 @@ const styles = StyleSheet.create({
     fontSize: 10,
     marginTop: 2,
   },
+
+  // Action Buttons Row with Google & Apple Maps
   actionButtonsRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
   },
-  directionsPrimaryButton: {
+  googleMapsButton: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
-    backgroundColor: "#3087E5",
+    gap: 5,
+    backgroundColor: "#0B315A",
+    borderWidth: 1,
+    borderColor: "rgba(0, 229, 255, 0.4)",
     paddingVertical: 9,
     borderRadius: 10,
-    shadowColor: "#3087E5",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.35,
-    shadowRadius: 4,
-    elevation: 3,
   },
-  directionsPrimaryButtonText: {
+  googleMapsButtonText: {
+    color: "#00E5FF",
+    fontSize: 11.5,
+    fontWeight: "700",
+  },
+  appleMapsButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    backgroundColor: "#16345A",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.25)",
+    paddingVertical: 9,
+    borderRadius: 10,
+  },
+  appleMapsButtonText: {
     color: "#FFFFFF",
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: "700",
   },
   callClinicButton: {

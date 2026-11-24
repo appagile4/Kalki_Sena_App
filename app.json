@@ -30,7 +30,8 @@
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION"
       ],
-      "package": "com.agileapp977.Kalki_Sena_Drive"
+      "package": "com.agileapp977.Kalki_Sena_Drive",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "output": "server",
@@ -61,6 +62,13 @@
         }
       ],
       "expo-video",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#0266b3"
+        }
+      ],
       "./plugins/withEsewaIntent.js"
     ],
     "experiments": {

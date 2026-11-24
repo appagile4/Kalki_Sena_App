@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { StyleSheet, View, ScrollView, Alert } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -21,6 +21,7 @@ import {
   CommunityProgramItem,
   ServiceItem,
 } from "../../components/Home/types";
+import { notificationCenterApi } from "../../services/notificationService";
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
@@ -28,6 +29,18 @@ export default function HomeScreen() {
   const dispatch = useAppDispatch();
   const { user, isAuthenticated } = useAppSelector((state) => state.auth);
   const [showSetPasswordModal, setShowSetPasswordModal] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setUnreadCount(0);
+      return;
+    }
+    notificationCenterApi
+      .fetchMyNotifications(1, 1)
+      .then((res) => setUnreadCount(res.unreadCount || 0))
+      .catch(() => {});
+  }, [isAuthenticated]);
 
   // Handlers for interactions
   const handleProfilePress = () => {
@@ -236,6 +249,7 @@ export default function HomeScreen() {
           onProfilePress={handleProfilePress}
           onNotificationPress={handleNotificationPress}
           onLogoutPress={handleLogoutPress}
+          unreadNotificationCount={unreadCount}
         />
 
         {/* 2. Hero / Mission Banner */}

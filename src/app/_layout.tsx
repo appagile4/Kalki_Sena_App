@@ -4,6 +4,10 @@ import { Stack, useRouter, useSegments } from "expo-router";
 import { Provider } from "react-redux";
 import { store } from "../redux/store";
 import { AuthProvider, useAuth } from "../context/AuthContext";
+import {
+  registerForPushNotificationsAsync,
+  setupPushNotificationListeners,
+} from "../services/notificationService";
 
 function RootNavigationLayout() {
   const { isInitialized, isAuthenticated } = useAuth();
@@ -27,6 +31,43 @@ function RootNavigationLayout() {
       router.replace("/Auth/login");
     }
   }, [isInitialized, isAuthenticated, segments, router]);
+
+  // Push notifications registration & listener lifecycle
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    // Register Expo push token when user is logged in
+    registerForPushNotificationsAsync().catch((err) => {
+      console.warn("[RootLayout] Push registration error:", err.message);
+    });
+
+    // Handle incoming and tapped push notifications
+    const unsubscribe = setupPushNotificationListeners(
+      (notification) => {
+        console.log("[RootLayout] Received foreground notification:", notification.request.content.title);
+      },
+      (response) => {
+        const data = response?.notification?.request?.content?.data;
+        if (!data) return;
+
+        if (data.screen === "OrderDetails" || data.orderId) {
+          router.push("/Home/mybook" as any);
+        } else if (data.screen === "notifications") {
+          router.push("/Home/notifications" as any);
+        } else if (data.screen) {
+          try {
+            router.push(data.screen as any);
+          } catch {
+            router.push("/Home" as any);
+          }
+        }
+      }
+    );
+
+    return () => {
+      unsubscribe();
+    };
+  }, [isAuthenticated, router]);
 
   if (!isInitialized) {
     return (

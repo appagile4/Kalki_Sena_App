@@ -188,6 +188,46 @@ export const secureStorage = {
   },
 
   /**
+   * Generic key-value storage helpers
+   */
+  async setItem(key: string, value: string): Promise<void> {
+    try {
+      const available = await isSecureStoreAvailable();
+      if (available) {
+        await SecureStore.setItemAsync(key, value);
+      } else {
+        memoryCache[key] = value;
+      }
+    } catch {
+      memoryCache[key] = value;
+    }
+  },
+
+  async getItem(key: string): Promise<string | null> {
+    try {
+      const available = await isSecureStoreAvailable();
+      if (available) {
+        return await SecureStore.getItemAsync(key);
+      }
+      return memoryCache[key] || null;
+    } catch {
+      return memoryCache[key] || null;
+    }
+  },
+
+  async removeItem(key: string): Promise<void> {
+    try {
+      const available = await isSecureStoreAvailable();
+      if (available) {
+        await SecureStore.deleteItemAsync(key);
+      }
+      delete memoryCache[key];
+    } catch {
+      delete memoryCache[key];
+    }
+  },
+
+  /**
    * Clear all Authentication Storage (Tokens + User Cache)
    */
   async clearAuthStorage(): Promise<void> {

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   StyleSheet,
   Text,
@@ -6,6 +6,8 @@ import {
   TouchableOpacity,
   FlatList,
   Alert,
+  ActivityIndicator,
+  RefreshControl,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -13,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
+import { notificationCenterApi } from "../../services/notificationService";
 
 export interface NotificationItem {
   id: string;
@@ -20,51 +23,99 @@ export interface NotificationItem {
   message: string;
   timestamp: string;
   read: boolean;
+  type?: string;
+  data?: any;
+}
+
+function formatTimeAgo(dateString?: string): string {
+  if (!dateString) return "Just now";
+  const now = Date.now();
+  const date = new Date(dateString).getTime();
+  if (isNaN(date)) return "Recently";
+  const diffSec = Math.floor((now - date) / 1000);
+  if (diffSec < 60) return "Just now";
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHour = Math.floor(diffMin / 60);
+  if (diffHour < 24) return `${diffHour}h ago`;
+  const diffDay = Math.floor(diffHour / 24);
+  if (diffDay < 7) return `${diffDay}d ago`;
+  return new Date(dateString).toLocaleDateString();
 }
 
 export default function NotificationsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const [notifications, setNotifications] = useState<NotificationItem[]>([
-    {
-      id: "1",
-      sender: "Mail",
-      message:
-        "We've just reached out 30k goal raised for charity!\nWe're so proud of the team!",
-      timestamp: "34m ago",
-      read: false,
-    },
-    {
-      id: "2",
-      sender: "Mail",
-      message:
-        "We've just reached out 30k goal raised for charity!\nWe're so proud of the team!",
-      timestamp: "34m ago",
-      read: true,
-    },
-    {
-      id: "3",
-      sender: "Mail",
-      message:
-        "We've just reached out 30k goal raised for charity!\nWe're so proud of the team!",
-      timestamp: "34m ago",
-      read: true,
-    },
-  ]);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
+
+  const loadNotifications = useCallback(async (isRefresh = false) => {
+    try {
+      if (isRefresh) setRefreshing(true);
+      else setLoading(true);
+
+      const res = await notificationCenterApi.fetchMyNotifications(1, 50);
+      const mapped: NotificationItem[] = res.notifications.map((n: any) => ({
+        id: n._id || n.id,
+        sender: n.title || "Kalki Sena Drive",
+        message: n.body || "",
+        timestamp: formatTimeAgo(n.createdAt),
+        read: Boolean(n.isRead),
+        type: n.type,
+        data: n.data,
+      }));
+      setNotifications(mapped);
+    } catch (err: any) {
+      console.warn("[NotificationsScreen] Failed to fetch notifications:", err.message);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadNotifications();
+  }, [loadNotifications]);
 
   const hasUnread = notifications.some((n) => !n.read);
 
-  const handleMarkAllAsRead = () => {
+  const handleMarkAllAsRead = async () => {
     if (!hasUnread) return;
     setNotifications((prev) => prev.map((item) => ({ ...item, read: true })));
+    try {
+      await notificationCenterApi.markAllAsRead();
+    } catch (err: any) {
+      console.warn("Failed to mark all as read:", err.message);
+    }
   };
 
-  const handleNotificationPress = (item: NotificationItem) => {
+  const handleNotificationPress = async (item: NotificationItem) => {
     if (!item.read) {
       setNotifications((prev) =>
         prev.map((n) => (n.id === item.id ? { ...n, read: true } : n))
       );
+      try {
+        await notificationCenterApi.markAsRead(item.id);
+      } catch (err: any) {
+        console.warn("Failed to mark notification read:", err.message);
+      }
+    }
+
+    // Deep navigation based on notification payload
+    if (
+      item.data?.screen === "OrderDetails" ||
+      item.data?.orderId ||
+      item.type?.startsWith("ORDER")
+    ) {
+      router.push("/Home/mybook" as any);
+    } else if (item.data?.screen && item.data.screen !== "Home") {
+      try {
+        router.push(item.data.screen as any);
+      } catch {
+        router.push("/Home" as any);
+      }
     }
   };
 
@@ -72,17 +123,25 @@ export default function NotificationsScreen() {
     Alert.alert(item.sender, "Notification Options", [
       {
         text: item.read ? "Mark as unread" : "Mark as read",
-        onPress: () => {
+        onPress: async () => {
           setNotifications((prev) =>
             prev.map((n) => (n.id === item.id ? { ...n, read: !n.read } : n))
           );
+          if (!item.read) {
+            await notificationCenterApi.markAsRead(item.id);
+          }
         },
       },
       {
         text: "Delete",
         style: "destructive",
-        onPress: () => {
+        onPress: async () => {
           setNotifications((prev) => prev.filter((n) => n.id !== item.id));
+          try {
+            await notificationCenterApi.deleteNotification(item.id);
+          } catch (err: any) {
+            console.warn("Failed to delete notification:", err.message);
+          }
         },
       },
       { text: "Cancel", style: "cancel" },
@@ -104,10 +163,10 @@ export default function NotificationsScreen() {
           activeOpacity={0.8}
           onPress={() => handleNotificationPress(item)}
         >
-          {/* Avatar on Left */}
+          {/* Avatar / Icon on Left */}
           <View style={styles.avatarWrapper}>
             <Image
-              source={require("../../../assets/images/avatar.png")}
+              source={require("../../../assets/images/icon.png")}
               style={styles.avatar}
               contentFit="cover"
               transition={200}
@@ -118,7 +177,12 @@ export default function NotificationsScreen() {
           <View style={styles.contentColumn}>
             {/* Top row: Sender Name and 3-dots */}
             <View style={styles.senderRow}>
-              <Text style={styles.senderText}>{item.sender}</Text>
+              <View style={styles.senderTitleGroup}>
+                <Text style={styles.senderText} numberOfLines={1}>
+                  {item.sender}
+                </Text>
+                {isUnread && <View style={styles.unreadDot} />}
+              </View>
               <TouchableOpacity
                 onPress={() => handleOptionsPress(item)}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -189,30 +253,45 @@ export default function NotificationsScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Notifications List */}
-      <FlatList
-        data={notifications}
-        keyExtractor={(item) => item.id}
-        renderItem={renderNotificationItem}
-        contentContainerStyle={[
-          styles.listContent,
-          { paddingBottom: Math.max(insets.bottom, 24) + 16 },
-        ]}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Ionicons
-              name="notifications-off-outline"
-              size={48}
-              color="#4B5E76"
+      {/* Notifications List or Loading Spinner */}
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#0266B3" />
+          <Text style={styles.loadingText}>Loading notifications...</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={notifications}
+          keyExtractor={(item) => item.id}
+          renderItem={renderNotificationItem}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: Math.max(insets.bottom, 24) + 16 },
+          ]}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => loadNotifications(true)}
+              tintColor="#0266B3"
+              colors={["#0266B3"]}
             />
-            <Text style={styles.emptyTitle}>No Notifications</Text>
-            <Text style={styles.emptySubtext}>
-              You have no active notifications right now.
-            </Text>
-          </View>
-        }
-      />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Ionicons
+                name="notifications-off-outline"
+                size={48}
+                color="#4B5E76"
+              />
+              <Text style={styles.emptyTitle}>No Notifications</Text>
+              <Text style={styles.emptySubtext}>
+                You have no active notifications right now. Order updates and broadcast announcements will appear here.
+              </Text>
+            </View>
+          }
+        />
+      )}
     </View>
   );
 }
@@ -273,8 +352,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   notificationCardUnread: {
-    backgroundColor: "#0B3766",
-    borderRadius: 12,
+    backgroundColor: "rgba(11, 55, 102, 0.6)",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(48, 135, 229, 0.25)",
   },
   notificationCardRead: {
     backgroundColor: "transparent",
@@ -285,6 +366,8 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     overflow: "hidden",
     backgroundColor: "#10233D",
+    alignItems: "center",
+    justifyContent: "center",
   },
   avatar: {
     width: "100%",
@@ -299,11 +382,23 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
+  senderTitleGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
   senderText: {
     color: "#FFFFFF",
-    fontSize: 15.5,
+    fontSize: 15,
     fontWeight: "700",
     letterSpacing: 0.1,
+  },
+  unreadDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: "#38bdf8",
+    marginLeft: 6,
   },
   moreButton: {
     padding: 2,
@@ -327,6 +422,17 @@ const styles = StyleSheet.create({
     backgroundColor: "#1E2B3E",
     marginTop: 6,
     marginHorizontal: 4,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingTop: 60,
+  },
+  loadingText: {
+    color: "#94a3b8",
+    fontSize: 13,
+    marginTop: 12,
   },
   emptyContainer: {
     alignItems: "center",

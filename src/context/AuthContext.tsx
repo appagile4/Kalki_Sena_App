@@ -9,6 +9,7 @@ import {
   User,
 } from "../redux/slices/authSlice";
 import { LoginPayload, SignupPayload, ApiResponse } from "../services/api";
+import { deregisterDeviceToken } from "../services/notificationService";
 
 export interface AuthContextType {
   user: User | null;
@@ -59,6 +60,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const logout = async (): Promise<void> => {
+    try {
+      await deregisterDeviceToken();
+    } catch (e) {
+      // Ignore network errors on logout token cleanup
+    }
     await dispatch(logoutThunk()).unwrap();
   };
 

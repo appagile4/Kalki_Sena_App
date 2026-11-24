@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "15512843609",
+    "project_id": "kalkisenadrive-8ff28",
+    "storage_bucket": "kalkisenadrive-8ff28.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:15512843609:android:ec6dd76d0eb98faa230848",
+        "android_client_info": {
+          "package_name": "com.agileapp977.Kalki_Sena_Drive"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "YOUR_FIREBASE_API_KEY_HERE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -22,6 +22,7 @@ interface HomeHeaderProps {
   onLogoutPress?: () => void;
   onReloadPress?: () => void;
   qrValue?: string;
+  unreadNotificationCount?: number;
 }
 
 // Custom SVG Logout Icon matching the design image exactly
@@ -58,6 +59,7 @@ export default function HomeHeader({
   onLogoutPress,
   onReloadPress,
   qrValue = "https://kalkisenadrive.com/donate",
+  unreadNotificationCount = 0,
 }: HomeHeaderProps) {
   const [qrModalVisible, setQrModalVisible] = useState(false);
   const handleLogoutAction = onLogoutPress || onReloadPress;
@@ -112,6 +114,13 @@ export default function HomeHeader({
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <Ionicons name="notifications" size={20} color="#FFFFFF" />
+          {unreadNotificationCount > 0 && (
+            <View style={styles.badgeContainer}>
+              <Text style={styles.badgeText}>
+                {unreadNotificationCount > 9 ? "9+" : unreadNotificationCount}
+              </Text>
+            </View>
+          )}
         </TouchableOpacity>
 
         {/* Logout Button with custom SVG */}
@@ -267,5 +276,24 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     letterSpacing: 0.3,
+  },
+  badgeContainer: {
+    position: "absolute",
+    top: 2,
+    right: 2,
+    backgroundColor: "#EF4444",
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 3,
+    borderWidth: 1.5,
+    borderColor: "#03142c",
+  },
+  badgeText: {
+    color: "#FFFFFF",
+    fontSize: 9,
+    fontWeight: "bold",
   },
 });
