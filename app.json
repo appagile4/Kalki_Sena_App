@@ -13,9 +13,12 @@
       "icon": "./assets/expo.icon",
       "infoPlist": {
         "LSApplicationQueriesSchemes": [
+          "esewa",
           "esewa"
-        ]
-      }
+        ],
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "config": {}
     },
     "android": {
       "adaptiveIcon": {

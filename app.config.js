@@ -1,30 +1,19 @@
 module.exports = ({ config }) => {
-  const googleMapsApiKey =
-    process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ||
-    process.env.GOOGLE_MAPS_API_KEY ||
-    "";
-
   return {
     ...config,
-    ios: {
-      ...config.ios,
-      config: {
-        ...(config.ios?.config || {}),
-        ...(googleMapsApiKey ? { googleMapsApiKey } : {}),
-      },
-    },
     android: {
       ...config.android,
-      config: {
-        ...(config.android?.config || {}),
-        ...(googleMapsApiKey
-          ? {
-              googleMaps: {
-                apiKey: googleMapsApiKey,
-              },
-            }
-          : {}),
-      },
+      googleServicesFile:
+        process.env.GOOGLE_SERVICES_JSON ||
+        config.android?.googleServicesFile ||
+        "./google-services.json",
+    },
+    ios: {
+      ...config.ios,
+      googleServicesFile:
+        process.env.GOOGLE_SERVICES_INFO_PLIST ||
+        config.ios?.googleServicesFile ||
+        "./GoogleService-Info.plist",
     },
   };
 };
