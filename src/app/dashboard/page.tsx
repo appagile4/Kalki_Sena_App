@@ -5,6 +5,7 @@ import Sidebar from "../../components/Sidebar";
 import BookManagement from "../../components/BookManagement";
 import VideoManagement from "../../components/VideoManagement";
 import DriverKycManagement from "../../components/DriverKycManagement";
+import BroadcastManagement from "../../components/BroadcastManagement";
 import {
   Users,
   Car,
@@ -441,12 +442,16 @@ export default function SuperadminDashboardPage() {
           {/* Promo Video Management Tab */}
           {activeTab === "video" && <VideoManagement />}
 
+          {/* Push Broadcast Management Tab */}
+          {activeTab === "broadcast" && <BroadcastManagement />}
+
           {/* Fallback for other tabs */}
           {activeTab !== "overview" &&
             activeTab !== "drivers" &&
             activeTab !== "kyc" &&
             activeTab !== "book" &&
-            activeTab !== "video" && (
+            activeTab !== "video" &&
+            activeTab !== "broadcast" && (
               <div className="bg-white rounded-2xl p-8 border border-slate-100 shadow-sm text-center py-16">
                 <div className="w-14 h-14 rounded-2xl bg-blue-50 text-[#0266b3] mx-auto flex items-center justify-center mb-4">
                   <ShieldCheck className="w-7 h-7" />

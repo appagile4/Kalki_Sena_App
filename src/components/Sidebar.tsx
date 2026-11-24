@@ -25,6 +25,7 @@ import {
   Menu,
   X,
   Radio,
+  Bell,
 } from "lucide-react";
 
 export interface NavItem {
@@ -72,6 +73,13 @@ export const SIDEBAR_NAV_GROUPS: NavGroup[] = [
         icon: AlertTriangle,
         badge: "Active",
         badgeColor: "bg-red-500/10 text-red-600 border border-red-500/20",
+      },
+      {
+        id: "broadcast",
+        label: "Push Broadcast",
+        icon: Bell,
+        badge: "FCM+APNs",
+        badgeColor: "bg-cyan-500/10 text-cyan-600 border border-cyan-500/20",
       },
     ],
   },
