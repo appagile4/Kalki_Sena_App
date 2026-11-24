@@ -1,6 +1,11 @@
 const Book = require("../models/Book");
 const BookOrder = require("../models/BookOrder");
-const { uploadBookCoverToCloudinary } = require("../services/cloudinaryService");
+const pushService = require("../services/pushNotificationService");
+const {
+  uploadBookCoverToCloudinary,
+  uploadBookPdfToCloudinary,
+  deletePdfFromCloudinary,
+} = require("../services/cloudinaryService");
 
 // Default initial book payload matching the frontend UI (Screens/E-Book/bookDetails.tsx)
 const DEFAULT_BOOK = {
@@ -448,6 +453,13 @@ exports.getBookById = async (req, res, next) => {
 // POST /api/books (Superadmin/Admin create)
 exports.createBook = async (req, res, next) => {
   try {
+    if (req.body.chapters && Array.isArray(req.body.chapters) && req.body.chapters.length > 3) {
+      return res.status(400).json({
+        success: false,
+        message: "Only a maximum of 3 chapters can be added for the book.",
+      });
+    }
+
     const newBook = await Book.create(req.body);
     res.status(201).json({
       success: true,
@@ -462,6 +474,13 @@ exports.createBook = async (req, res, next) => {
 // PUT /api/books (Update primary book or create if none exists)
 exports.updatePrimaryBook = async (req, res, next) => {
   try {
+    if (req.body.chapters && Array.isArray(req.body.chapters) && req.body.chapters.length > 3) {
+      return res.status(400).json({
+        success: false,
+        message: "Only a maximum of 3 chapters can be added for the book.",
+      });
+    }
+
     let book = await Book.findOne();
     if (!book) {
       book = await Book.create({ ...DEFAULT_BOOK, ...req.body });
@@ -484,6 +503,13 @@ exports.updatePrimaryBook = async (req, res, next) => {
 // PUT /api/books/:id (Superadmin/Admin update)
 exports.updateBook = async (req, res, next) => {
   try {
+    if (req.body.chapters && Array.isArray(req.body.chapters) && req.body.chapters.length > 3) {
+      return res.status(400).json({
+        success: false,
+        message: "Only a maximum of 3 chapters can be added for the book.",
+      });
+    }
+
     const updated = await Book.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
       runValidators: true,
@@ -615,6 +641,11 @@ exports.createBookOrder = async (req, res, next) => {
       });
     }
 
+    // Trigger automatic order push notification to customer (asynchronous, non-blocking)
+    pushService.sendOrderNotification("ORDER_PLACED", newOrder).catch((err) =>
+      console.error("[OrderNotification] Failed to trigger order placed push:", err.message)
+    );
+
     res.status(201).json({
       success: true,
       message: "Book ordered successfully",
@@ -666,6 +697,13 @@ exports.updateOrderStatus = async (req, res, next) => {
         success: false,
         message: "Order not found",
       });
+    }
+
+    // Trigger automatic push notification to customer for status changes
+    if (orderStatus) {
+      pushService.sendOrderNotification(orderStatus, order).catch((err) =>
+        console.error("[OrderNotification] Failed to trigger status change push:", err.message)
+      );
     }
 
     res.status(200).json({
@@ -769,6 +807,91 @@ exports.uploadBookCover = async (req, res, next) => {
       success: true,
       message: "Book cover uploaded successfully",
       coverUrl,
+      data: book,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /api/books/upload-pdf (Superadmin upload book PDF)
+exports.uploadBookPdf = async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "Please upload a valid PDF file",
+      });
+    }
+
+    let book = await Book.findOne();
+    if (!book) {
+      book = await Book.create(DEFAULT_BOOK);
+    }
+
+    // Delete existing PDF from Cloudinary if one exists
+    if (book.pdfPublicId) {
+      try {
+        await deletePdfFromCloudinary(book.pdfPublicId);
+      } catch (delErr) {
+        console.warn("Failed to delete previous PDF from Cloudinary:", delErr.message);
+      }
+    }
+
+    const uploadResult = await uploadBookPdfToCloudinary(
+      req.file.buffer,
+      req.file.originalname
+    );
+
+    book.pdfUrl = uploadResult.url;
+    book.pdfPublicId = uploadResult.publicId;
+    book.pdfFileName = req.file.originalname;
+    book.pdfFileSize = uploadResult.bytes || req.file.size || 0;
+    book.pdfUploadedAt = new Date();
+    await book.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Book PDF uploaded successfully",
+      pdfUrl: uploadResult.url,
+      pdfFileName: book.pdfFileName,
+      pdfFileSize: book.pdfFileSize,
+      data: book,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// DELETE /api/books/pdf (Superadmin delete book PDF)
+exports.deleteBookPdf = async (req, res, next) => {
+  try {
+    const book = await Book.findOne();
+    if (!book || !book.pdfUrl) {
+      return res.status(404).json({
+        success: false,
+        message: "No book PDF found to delete",
+      });
+    }
+
+    if (book.pdfPublicId) {
+      try {
+        await deletePdfFromCloudinary(book.pdfPublicId);
+      } catch (delErr) {
+        console.warn("Failed to delete PDF from Cloudinary:", delErr.message);
+      }
+    }
+
+    book.pdfUrl = "";
+    book.pdfPublicId = "";
+    book.pdfFileName = "";
+    book.pdfFileSize = 0;
+    book.pdfUploadedAt = null;
+    await book.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Book PDF removed successfully",
       data: book,
     });
   } catch (error) {

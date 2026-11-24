@@ -228,6 +228,81 @@ const deleteVideoFromCloudinary = async (publicId) => {
   }
 };
 
+/**
+ * Upload a PDF document buffer or base64 to Cloudinary
+ * @param {Buffer|string} fileSource
+ * @param {string} originalFileName
+ * @returns {Promise<{ url: string, publicId: string, bytes?: number }>}
+ */
+const uploadBookPdfToCloudinary = async (fileSource, originalFileName = "book.pdf") => {
+  const sanitizedName = String(originalFileName)
+    .replace(/\.[^/.]+$/, "")
+    .replace(/[^a-zA-Z0-9_-]/g, "_")
+    .slice(0, 40) || "book_pdf";
+
+  const defaultOptions = {
+    folder: "kalki_sena/books/pdf",
+    public_id: `${sanitizedName}_${Date.now()}`,
+    resource_type: "raw", // preserves binary PDF for direct downloading
+    format: "pdf",
+  };
+
+  if (Buffer.isBuffer(fileSource)) {
+    return new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        defaultOptions,
+        (error, result) => {
+          if (error) return reject(error);
+          resolve({
+            url: result.secure_url,
+            publicId: result.public_id,
+            bytes: result.bytes || 0,
+            format: result.format || "pdf",
+          });
+        }
+      );
+      uploadStream.end(fileSource);
+    });
+  }
+
+  if (typeof fileSource === "string") {
+    let uploadData = fileSource;
+    if (
+      !fileSource.startsWith("data:") &&
+      !fileSource.startsWith("http://") &&
+      !fileSource.startsWith("https://")
+    ) {
+      uploadData = `data:application/pdf;base64,${fileSource}`;
+    }
+
+    const result = await cloudinary.uploader.upload(uploadData, defaultOptions);
+    return {
+      url: result.secure_url,
+      publicId: result.public_id,
+      bytes: result.bytes || 0,
+      format: result.format || "pdf",
+    };
+  }
+
+  throw new Error("Invalid PDF file source provided for upload");
+};
+
+/**
+ * Delete a PDF from Cloudinary by public ID
+ */
+const deletePdfFromCloudinary = async (publicId) => {
+  if (!publicId) return;
+  try {
+    const res = await cloudinary.uploader.destroy(publicId, {
+      resource_type: "raw",
+    });
+    console.log(`[Cloudinary] Previous PDF deleted: ${publicId}`, res);
+    return res;
+  } catch (err) {
+    console.error(`[Cloudinary] PDF delete error (${publicId}):`, err.message);
+  }
+};
+
 module.exports = {
   uploadAvatarToCloudinary,
   uploadBookCoverToCloudinary,
@@ -235,4 +310,6 @@ module.exports = {
   deleteAvatarFromCloudinary,
   uploadVideoToCloudinary,
   deleteVideoFromCloudinary,
+  uploadBookPdfToCloudinary,
+  deletePdfFromCloudinary,
 };

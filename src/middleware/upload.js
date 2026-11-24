@@ -43,5 +43,26 @@ const uploadVideo = multer({
   fileFilter: videoFilter,
 });
 
+// Accept PDF documents only
+const pdfFilter = (req, file, cb) => {
+  if (
+    file.mimetype === "application/pdf" ||
+    /\.(pdf)$/i.test(file.originalname)
+  ) {
+    cb(null, true);
+  } else {
+    cb(new Error("Only PDF files (.pdf) are allowed"), false);
+  }
+};
+
+const uploadPdf = multer({
+  storage,
+  limits: {
+    fileSize: 100 * 1024 * 1024, // 100MB limit for PDF book
+  },
+  fileFilter: pdfFilter,
+});
+
 module.exports = upload;
 module.exports.uploadVideo = uploadVideo;
+module.exports.uploadPdf = uploadPdf;

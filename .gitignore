@@ -5,6 +5,9 @@ node_modules/
 .env
 .env.local
 .env.*.local
+*firebase*.json
+*serviceAccount*.json
+serviceAccountKey.json
 
 # Logs
 npm-debug.log*

@@ -77,10 +77,23 @@ const bookOrderSchema = new mongoose.Schema(
       type: String,
       default: "NPR",
     },
+    payment: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Payment",
+      default: null,
+    },
+    esewaTransactionCode: {
+      type: String,
+      default: "",
+    },
+    esewaTransactionUuid: {
+      type: String,
+      default: "",
+    },
     paymentStatus: {
       type: String,
-      enum: ["pending", "completed", "failed"],
-      default: "completed",
+      enum: ["pending", "completed", "failed", "cancelled"],
+      default: "pending",
     },
     orderStatus: {
       type: String,

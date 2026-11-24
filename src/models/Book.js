@@ -133,11 +133,38 @@ const bookSchema = new mongoose.Schema(
       default: ["physical", "digital"],
     },
     pickupClinics: [clinicSchema],
-    chapters: [chapterSchema],
+    chapters: {
+      type: [chapterSchema],
+      validate: [
+        (val) => !val || val.length <= 3,
+        "A maximum of 3 chapters can be added for the book",
+      ],
+    },
     reviews: [reviewSchema],
     promoVideo: {
       type: promoVideoSchema,
       default: () => ({}),
+    },
+    // PDF Document for Digital Edition
+    pdfUrl: {
+      type: String,
+      default: "",
+    },
+    pdfPublicId: {
+      type: String,
+      default: "",
+    },
+    pdfFileName: {
+      type: String,
+      default: "",
+    },
+    pdfFileSize: {
+      type: Number,
+      default: 0,
+    },
+    pdfUploadedAt: {
+      type: Date,
+      default: null,
     },
     totalSold: {
       type: Number,

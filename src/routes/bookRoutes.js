@@ -12,6 +12,8 @@ const {
   updateOrderStatus,
   getBookStats,
   uploadBookCover,
+  uploadBookPdf,
+  deleteBookPdf,
   getClinics,
   updateClinics,
   addClinic,
@@ -20,12 +22,20 @@ const {
   getPromoVideo,
   updatePromoVideo,
 } = require("../controllers/bookController");
+const {
+  getFeaturedBook,
+  getMyPurchaseStatus,
+} = require("../controllers/paymentController");
 const { protect } = require("../middleware/auth");
 const upload = require("../middleware/upload");
+const { uploadPdf } = require("../middleware/upload");
 
 // Public Book Information & Stats
 router.get("/", getBooks);
+router.get("/featured", getFeaturedBook);
 router.get("/stats", getBookStats);
+// User's verified book purchase access
+router.get("/my-purchase", protect, getMyPurchaseStatus);
 // Clinics Management
 router.get("/clinics", getClinics);
 router.put("/clinics", updateClinics);
@@ -38,6 +48,10 @@ router.get("/:id", getBookById);
 
 // Cover Image Upload
 router.post("/upload-cover", upload.single("coverImage"), uploadBookCover);
+
+// Book PDF Document Upload & Deletion (Superadmin)
+router.post("/upload-pdf", uploadPdf.single("pdf"), uploadBookPdf);
+router.delete("/pdf", deleteBookPdf);
 
 // Book Ordering (Users / Public App Booking)
 router.post("/orders", createBookOrder);

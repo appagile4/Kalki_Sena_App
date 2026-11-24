@@ -8,6 +8,9 @@ const authRoutes = require("./routes/authRoutes");
 const bookRoutes = require("./routes/bookRoutes");
 const videoRoutes = require("./routes/videoRoutes");
 const driverRoutes = require("./routes/driverRoutes");
+const paymentRoutes = require("./routes/paymentRoutes");
+const adminPaymentRoutes = require("./routes/adminPaymentRoutes");
+const notificationRoutes = require("./routes/notificationRoutes");
 const { notFound, errorHandler } = require("./middleware/errorHandler");
 
 const app = express();
@@ -81,6 +84,9 @@ app.use("/api/auth", authRoutes);
 app.use("/api/books", bookRoutes);
 app.use("/api/videos", videoRoutes);
 app.use("/api/driver", driverRoutes);
+app.use("/api/payments", paymentRoutes);
+app.use("/api/admin/payments", adminPaymentRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 // 8. 404 & Central Error Handling
 app.use(notFound);
