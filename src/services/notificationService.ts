@@ -1,5 +1,5 @@
 import { Platform } from "react-native";
-import * as Notifications from "expo-notifications";
+import type * as NotificationsType from "expo-notifications";
 import * as Device from "expo-device";
 import Constants from "expo-constants";
 import { API_BASE_URL, getAuthHeaders, ApiResponse } from "./api";
@@ -7,16 +7,54 @@ import { secureStorage } from "./secureStorage";
 
 const PUSH_TOKEN_STORAGE_KEY = "kalki_expo_push_token";
 
-// Configure how notifications are displayed when app is in foreground
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+let cachedNotifications: typeof import("expo-notifications") | null = null;
+let isNativeModuleChecked = false;
+let isNativeModuleAvailable = false;
+
+/**
+ * Safely resolve expo-notifications module at runtime without crashing top-level bundle
+ * evaluation if ExpoPushTokenManager is missing (e.g. running inside standard Expo Go).
+ */
+export function getNotificationsModule(): typeof import("expo-notifications") | null {
+  if (isNativeModuleChecked) {
+    return isNativeModuleAvailable ? cachedNotifications : null;
+  }
+
+  isNativeModuleChecked = true;
+  try {
+    const mod = require("expo-notifications");
+    if (mod && typeof mod.getExpoPushTokenAsync === "function") {
+      cachedNotifications = mod;
+      isNativeModuleAvailable = true;
+
+      // Configure how notifications are displayed when app is in foreground
+      try {
+        mod.setNotificationHandler({
+          handleNotification: async () => ({
+            shouldShowAlert: true,
+            shouldPlaySound: true,
+            shouldSetBadge: true,
+            shouldShowBanner: true,
+            shouldShowList: true,
+          }),
+        });
+      } catch (handlerErr: any) {
+        console.warn("[PushNotification] setNotificationHandler error:", handlerErr?.message);
+      }
+
+      return mod;
+    }
+  } catch (err: any) {
+    console.warn(
+      "[PushNotification] Native module 'ExpoPushTokenManager' is not linked in current runtime (e.g. Expo Go).\n" +
+      "Push notifications will be active in EAS / native development builds."
+    );
+    cachedNotifications = null;
+    isNativeModuleAvailable = false;
+  }
+
+  return null;
+}
 
 /**
  * Request notification permissions and register Expo push token with backend
@@ -25,23 +63,33 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
   let token: string | null = null;
 
   try {
+    const Notifications = getNotificationsModule();
+    if (!Notifications) {
+      console.log("[PushNotification] Skipping push registration: native module unavailable in this environment.");
+      return null;
+    }
+
     // 1. Android Notification Channels configuration
     if (Platform.OS === "android") {
-      await Notifications.setNotificationChannelAsync("default", {
-        name: "General Notifications",
-        importance: Notifications.AndroidImportance.HIGH,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: "#0266B3",
-        sound: "default",
-      });
+      try {
+        await Notifications.setNotificationChannelAsync("default", {
+          name: "General Notifications",
+          importance: Notifications.AndroidImportance.HIGH,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: "#0266B3",
+          sound: "default",
+        });
 
-      await Notifications.setNotificationChannelAsync("orders", {
-        name: "Order & Ride Updates",
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 500, 250, 500],
-        lightColor: "#0266B3",
-        sound: "default",
-      });
+        await Notifications.setNotificationChannelAsync("orders", {
+          name: "Order & Ride Updates",
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 500, 250, 500],
+          lightColor: "#0266B3",
+          sound: "default",
+        });
+      } catch (channelErr: any) {
+        console.warn("[PushNotification] setNotificationChannelAsync warning:", channelErr?.message);
+      }
     }
 
     // 2. Physical device check (Simulators cannot receive remote APNs/FCM pushes)
@@ -73,7 +121,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
     const pushTokenData = await Notifications.getExpoPushTokenAsync({
       projectId,
     });
-    token = pushTokenData.data;
+    token = pushTokenData?.data || null;
 
     if (token) {
       // Store token locally
@@ -83,7 +131,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
       await syncTokenWithBackend(token);
     }
   } catch (error: any) {
-    console.error("[PushNotification] Error acquiring push token:", error.message || error);
+    console.error("[PushNotification] Error acquiring push token:", error?.message || error);
   }
 
   return token;
@@ -124,7 +172,7 @@ export async function syncTokenWithBackend(token: string): Promise<boolean> {
       return false;
     }
   } catch (err: any) {
-    console.error("[PushNotification] syncTokenWithBackend failed:", err.message);
+    console.error("[PushNotification] syncTokenWithBackend failed:", err?.message || err);
     return false;
   }
 }
@@ -148,7 +196,7 @@ export async function deregisterDeviceToken(): Promise<void> {
 
     await secureStorage.removeItem(PUSH_TOKEN_STORAGE_KEY);
   } catch (err: any) {
-    console.error("[PushNotification] deregisterDeviceToken error:", err.message);
+    console.error("[PushNotification] deregisterDeviceToken error:", err?.message || err);
   }
 }
 
@@ -156,27 +204,41 @@ export async function deregisterDeviceToken(): Promise<void> {
  * Setup push notification foreground and click handlers
  */
 export function setupPushNotificationListeners(
-  onNotificationReceived?: (notification: Notifications.Notification) => void,
-  onNotificationResponse?: (response: Notifications.NotificationResponse) => void
+  onNotificationReceived?: (notification: NotificationsType.Notification) => void,
+  onNotificationResponse?: (response: NotificationsType.NotificationResponse) => void
 ) {
-  const receivedSubscription = Notifications.addNotificationReceivedListener((notification) => {
-    console.log("[PushNotification] Notification received in foreground:", notification.request.content.title);
-    if (onNotificationReceived) {
-      onNotificationReceived(notification);
-    }
-  });
+  const Notifications = getNotificationsModule();
+  if (!Notifications) {
+    return () => {};
+  }
 
-  const responseSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
-    console.log("[PushNotification] User tapped notification:", response.notification.request.content.data);
-    if (onNotificationResponse) {
-      onNotificationResponse(response);
-    }
-  });
+  try {
+    const receivedSubscription = Notifications.addNotificationReceivedListener((notification) => {
+      console.log("[PushNotification] Notification received in foreground:", notification.request.content.title);
+      if (onNotificationReceived) {
+        onNotificationReceived(notification);
+      }
+    });
 
-  return () => {
-    receivedSubscription.remove();
-    responseSubscription.remove();
-  };
+    const responseSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      console.log("[PushNotification] User tapped notification:", response.notification.request.content.data);
+      if (onNotificationResponse) {
+        onNotificationResponse(response);
+      }
+    });
+
+    return () => {
+      try {
+        receivedSubscription.remove();
+        responseSubscription.remove();
+      } catch {
+        // Ignored
+      }
+    };
+  } catch (listenerErr: any) {
+    console.warn("[PushNotification] setupPushNotificationListeners warning:", listenerErr?.message);
+    return () => {};
+  }
 }
 
 /**

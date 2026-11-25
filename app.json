@@ -8,7 +8,7 @@
     "scheme": "kalkisenadrive",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "bundleIdentifier": "com.agileapp977.kalkisenadrive",
+      "bundleIdentifier": "com.kalkisenadrive",
       "googleServicesFile": "./GoogleService-Info.plist",
       "icon": "./assets/images/icon.png",
       "infoPlist": {
