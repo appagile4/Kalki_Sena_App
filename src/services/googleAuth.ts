@@ -65,12 +65,7 @@ export const configureGoogleSignIn = () => {
       webClientId: GOOGLE_WEB_CLIENT_ID,
       iosClientId: Platform.OS === "ios" ? GOOGLE_IOS_CLIENT_ID : undefined,
       offlineAccess: false,
-      scopes: [
-        "profile",
-        "email",
-        "https://www.googleapis.com/auth/user.birthday.read",
-        "https://www.googleapis.com/auth/user.gender.read",
-      ],
+      scopes: ["profile", "email"],
     });
     isConfigured = true;
   } catch (error) {
@@ -269,8 +264,8 @@ export const googleAuthService = {
           success: false,
           error:
             "DEVELOPER_ERROR (code 10):\n" +
-            "1. SHA-1 Mismatch: In Google Cloud Console (Credentials > Android Client), add your local debug SHA-1: 1F:9F:49:4B:95:38:DD:6A:EA:F7:A4:B9:CF:16:AA:E6:89:93:37:C9 for package com.kalkisenadrive.\n" +
-            "2. Web Client ID: Make sure webClientId is an OAuth client of type 'Web application' (not Android client).",
+            "1. SHA-1 Fingerprint: In Google Cloud Console / Firebase Console, add an Android OAuth Client for package 'com.kalkisenadrive' with your EAS Keystore SHA-1 fingerprint (found under expo.dev > Credentials > Android Keystore).\n" +
+            "2. Web Client ID: Ensure EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID is an OAuth client of type 'Web application' in the same Google Cloud project.",
         };
       }
 
