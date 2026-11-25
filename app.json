@@ -30,7 +30,7 @@
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION"
       ],
-      "package": "com.agileapp977.Kalki_Sena_Drive",
+      "package": "com.kalkisenadrive",
       "googleServicesFile": "./google-services.json"
     },
     "web": {
