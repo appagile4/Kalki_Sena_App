@@ -9,6 +9,7 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "bundleIdentifier": "com.kalkisenadrive",
+      "buildNumber": "2",
       "googleServicesFile": "./GoogleService-Info.plist",
       "icon": "./assets/images/icon.png",
       "infoPlist": {
@@ -31,6 +32,7 @@
         "android.permission.ACCESS_COARSE_LOCATION"
       ],
       "package": "com.kalkisenadrive",
+      "versionCode": 2,
       "googleServicesFile": "./google-services.json"
     },
     "web": {
