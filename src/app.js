@@ -87,6 +87,7 @@ app.use("/api/driver", driverRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/admin/payments", adminPaymentRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/v1/notifications", notificationRoutes);
 
 // 8. 404 & Central Error Handling
 app.use(notFound);

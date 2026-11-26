@@ -7,7 +7,8 @@ const pushService = require("../services/pushNotificationService");
 // 1. POST /api/notifications/register-token
 exports.registerToken = async (req, res, next) => {
   try {
-    const { token, platform, deviceId, deviceName, appVersion } = req.body;
+    const token = req.body.token || req.body.pushToken || req.body.expoPushToken;
+    const { platform, deviceId, deviceName, appVersion } = req.body;
 
     if (!token) {
       return res.status(400).json({
@@ -52,7 +53,7 @@ exports.registerToken = async (req, res, next) => {
 // 2. POST /api/notifications/deregister-token (e.g. On Logout)
 exports.deregisterToken = async (req, res, next) => {
   try {
-    const { token } = req.body;
+    const token = req.body.token || req.body.pushToken || req.body.expoPushToken;
 
     if (!token) {
       return res.status(400).json({
