@@ -39,14 +39,7 @@
     },
     "plugins": [
       "expo-router",
-      [
-        "expo-splash-screen",
-        {
-          "backgroundColor": "#208AEF",
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
-        }
-      ],
+
       "@react-native-community/datetimepicker",
       [
         "expo-image-picker",
@@ -82,7 +75,7 @@
         }
       },
       "eas": {
-        "projectId": "c47df24a-44e6-4729-8d12-ba63144370fb"
+        "projectId": "67483e0d-ff0b-455d-8801-aa57e65065f2"
       }
     }
   }
