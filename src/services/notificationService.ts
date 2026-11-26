@@ -77,7 +77,6 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
           importance: Notifications.AndroidImportance.HIGH,
           vibrationPattern: [0, 250, 250, 250],
           lightColor: "#0266B3",
-          sound: "default",
         });
 
         await Notifications.setNotificationChannelAsync("orders", {
@@ -85,7 +84,6 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
           importance: Notifications.AndroidImportance.MAX,
           vibrationPattern: [0, 500, 250, 500],
           lightColor: "#0266B3",
-          sound: "default",
         });
       } catch (channelErr: any) {
         console.warn("[PushNotification] setNotificationChannelAsync warning:", channelErr?.message);
