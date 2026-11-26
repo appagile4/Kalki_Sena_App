@@ -166,7 +166,13 @@ export async function syncTokenWithBackend(token: string): Promise<boolean> {
       console.log("[PushNotification] Token successfully synced with backend.");
       return true;
     } else {
-      console.warn("[PushNotification] Backend token registration error:", data.message);
+      if (response.status === 404) {
+        console.log(
+          "[PushNotification] Endpoint /api/notifications/register-token is not deployed yet on the server. Token saved locally."
+        );
+      } else {
+        console.warn("[PushNotification] Backend token registration error:", data.message);
+      }
       return false;
     }
   } catch (err: any) {
