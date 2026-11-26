@@ -3,6 +3,7 @@ const User = require("../models/User");
 const {
   uploadDriverDocToCloudinary,
 } = require("../services/cloudinaryService");
+const pushService = require("../services/pushNotificationService");
 
 // Optional auth helper: extracts user from Bearer token if present
 const extractUserIfAvailable = async (req) => {
@@ -315,13 +316,27 @@ exports.approveApplication = async (req, res) => {
     await application.save();
 
     // Upgrade linked user role to driver
+    let targetUserId = application.userId;
     if (application.userId) {
       await User.findByIdAndUpdate(application.userId, { role: "driver" });
     } else if (application.email) {
-      await User.findOneAndUpdate(
+      const u = await User.findOneAndUpdate(
         { email: application.email },
         { role: "driver" }
       );
+      if (u) targetUserId = u._id;
+    }
+
+    // Trigger driver partner approval push notification
+    if (targetUserId) {
+      pushService
+        .sendDriverKYCNotification(targetUserId, "approved")
+        .catch((err) =>
+          console.error(
+            "[DriverController] Failed to send driver approval notification:",
+            err.message
+          )
+        );
     }
 
     return res.status(200).json({
@@ -364,6 +379,27 @@ exports.rejectApplication = async (req, res) => {
       application.reviewedBy = req.user._id;
     }
     await application.save();
+
+    // Trigger driver partner rejection push notification
+    let targetUserId = application.userId;
+    if (!targetUserId && application.email) {
+      const u = await User.findOne({ email: application.email });
+      if (u) targetUserId = u._id;
+    }
+    if (targetUserId) {
+      pushService
+        .sendDriverKYCNotification(
+          targetUserId,
+          "rejected",
+          application.rejectionReason
+        )
+        .catch((err) =>
+          console.error(
+            "[DriverController] Failed to send driver rejection notification:",
+            err.message
+          )
+        );
+    }
 
     return res.status(200).json({
       success: true,

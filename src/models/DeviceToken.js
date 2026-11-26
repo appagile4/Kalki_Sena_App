@@ -15,6 +15,11 @@ const deviceTokenSchema = new mongoose.Schema(
       trim: true,
       index: true,
     },
+    expoPushToken: {
+      type: String,
+      trim: true,
+      index: true,
+    },
     platform: {
       type: String,
       enum: ["android", "ios", "web", "unknown"],
@@ -44,11 +49,29 @@ const deviceTokenSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    lastUsedAt: {
+      type: Date,
+      default: Date.now,
+    },
   },
   {
     timestamps: true,
   }
 );
+
+// Pre-save synchronization for field compatibility
+deviceTokenSchema.pre("save", function () {
+  if (this.token && !this.expoPushToken) {
+    this.expoPushToken = this.token;
+  } else if (this.expoPushToken && !this.token) {
+    this.token = this.expoPushToken;
+  }
+  if (this.lastActiveAt && !this.lastUsedAt) {
+    this.lastUsedAt = this.lastActiveAt;
+  } else if (this.lastUsedAt && !this.lastActiveAt) {
+    this.lastActiveAt = this.lastUsedAt;
+  }
+});
 
 // Compound index for querying active tokens for a specific user
 deviceTokenSchema.index({ user: 1, isActive: 1 });

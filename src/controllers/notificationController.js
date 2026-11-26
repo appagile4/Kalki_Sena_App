@@ -30,14 +30,16 @@ exports.registerToken = async (req, res, next) => {
       {
         user: req.user._id,
         token,
+        expoPushToken: token,
         platform: platform || "unknown",
         deviceId: deviceId || "",
         deviceName: deviceName || "",
         appVersion: appVersion || "",
         isActive: true,
         lastActiveAt: new Date(),
+        lastUsedAt: new Date(),
       },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
+      { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
     );
 
     res.status(200).json({
@@ -63,7 +65,10 @@ exports.deregisterToken = async (req, res, next) => {
     }
 
     await DeviceToken.updateMany(
-      { token, user: req.user._id },
+      {
+        $or: [{ token }, { expoPushToken: token }],
+        user: req.user._id,
+      },
       { isActive: false }
     );
 
@@ -83,13 +88,17 @@ exports.getMyNotifications = async (req, res, next) => {
     const limit = parseInt(req.query.limit) || 30;
     const skip = (page - 1) * limit;
 
+    const userFilter = {
+      $or: [{ recipient: req.user._id }, { user: req.user._id }],
+    };
+
     const [notifications, total, unreadCount] = await Promise.all([
-      Notification.find({ recipient: req.user._id })
+      Notification.find(userFilter)
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit),
-      Notification.countDocuments({ recipient: req.user._id }),
-      Notification.countDocuments({ recipient: req.user._id, isRead: false }),
+      Notification.countDocuments(userFilter),
+      Notification.countDocuments({ ...userFilter, isRead: false }),
     ]);
 
     res.status(200).json({
@@ -111,10 +120,15 @@ exports.getMyNotifications = async (req, res, next) => {
 // 4. PATCH /api/notifications/:id/read
 exports.markAsRead = async (req, res, next) => {
   try {
+    const userFilter = {
+      _id: req.params.id,
+      $or: [{ recipient: req.user._id }, { user: req.user._id }],
+    };
+
     const notification = await Notification.findOneAndUpdate(
-      { _id: req.params.id, recipient: req.user._id },
+      userFilter,
       { isRead: true, readAt: new Date() },
-      { new: true }
+      { returnDocument: "after" }
     );
 
     if (!notification) {
@@ -125,7 +139,7 @@ exports.markAsRead = async (req, res, next) => {
     }
 
     const unreadCount = await Notification.countDocuments({
-      recipient: req.user._id,
+      $or: [{ recipient: req.user._id }, { user: req.user._id }],
       isRead: false,
     });
 
@@ -144,7 +158,10 @@ exports.markAsRead = async (req, res, next) => {
 exports.markAllAsRead = async (req, res, next) => {
   try {
     await Notification.updateMany(
-      { recipient: req.user._id, isRead: false },
+      {
+        $or: [{ recipient: req.user._id }, { user: req.user._id }],
+        isRead: false,
+      },
       { isRead: true, readAt: new Date() }
     );
 
@@ -163,7 +180,7 @@ exports.deleteNotification = async (req, res, next) => {
   try {
     const notification = await Notification.findOneAndDelete({
       _id: req.params.id,
-      recipient: req.user._id,
+      $or: [{ recipient: req.user._id }, { user: req.user._id }],
     });
 
     if (!notification) {
@@ -174,7 +191,7 @@ exports.deleteNotification = async (req, res, next) => {
     }
 
     const unreadCount = await Notification.countDocuments({
-      recipient: req.user._id,
+      $or: [{ recipient: req.user._id }, { user: req.user._id }],
       isRead: false,
     });
 

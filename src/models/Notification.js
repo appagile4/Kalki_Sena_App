@@ -8,6 +8,11 @@ const notificationSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      index: true,
+    },
     title: {
       type: String,
       required: [true, "Notification title is required"],
@@ -27,6 +32,8 @@ const notificationSchema = new mongoose.Schema(
         "ORDER_DELIVERED",
         "ORDER_CANCELLED",
         "REFUND_PROCESSED",
+        "DRIVER_KYC_APPROVED",
+        "DRIVER_KYC_REJECTED",
         "BROADCAST",
         "PROMOTION",
         "SYSTEM",
@@ -71,6 +78,17 @@ const notificationSchema = new mongoose.Schema(
   }
 );
 
+// Pre-save synchronization so both 'recipient' and 'user' fields are always populated
+notificationSchema.pre("save", function () {
+  if (this.recipient && !this.user) {
+    this.user = this.recipient;
+  } else if (this.user && !this.recipient) {
+    this.recipient = this.user;
+  }
+});
+
+// Indexes for high performance querying & sorting
 notificationSchema.index({ recipient: 1, isRead: 1, createdAt: -1 });
+notificationSchema.index({ user: 1, isRead: 1, createdAt: -1 });
 
 module.exports = mongoose.model("Notification", notificationSchema);

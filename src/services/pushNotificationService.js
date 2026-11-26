@@ -61,7 +61,12 @@ const sendRawExpoPush = async (messages) => {
   // Deactivate any invalid/expired tokens asynchronously
   if (invalidTokens.length > 0) {
     DeviceToken.updateMany(
-      { token: { $in: invalidTokens } },
+      {
+        $or: [
+          { token: { $in: invalidTokens } },
+          { expoPushToken: { $in: invalidTokens } },
+        ],
+      },
       { isActive: false }
     ).catch((err) =>
       console.error("[PushNotification] Failed to deactivate invalid tokens:", err.message)
@@ -74,13 +79,25 @@ const sendRawExpoPush = async (messages) => {
 /**
  * Send a notification to an individual user (saves in DB and delivers to their devices)
  */
-const sendToUser = async (userId, { title, body, type = "SYSTEM", data = {}, priority = "high", sound = "default", channelId = "default" }) => {
+const sendToUser = async (
+  userId,
+  {
+    title,
+    body,
+    type = "SYSTEM",
+    data = {},
+    priority = "high",
+    sound = "default",
+    channelId = "default",
+  }
+) => {
   try {
     if (!userId) return null;
 
     // 1. Create in-app Notification record
     const notification = await Notification.create({
       recipient: userId,
+      user: userId,
       title,
       body,
       type,
@@ -99,9 +116,10 @@ const sendToUser = async (userId, { title, body, type = "SYSTEM", data = {}, pri
     // 3. Construct Expo push messages
     const validMessages = [];
     for (const record of tokens) {
-      if (isValidExpoPushToken(record.token)) {
+      const activePushToken = record.expoPushToken || record.token;
+      if (isValidExpoPushToken(activePushToken)) {
         validMessages.push({
-          to: record.token,
+          to: activePushToken,
           sound: sound || "default",
           title,
           body,
@@ -118,7 +136,8 @@ const sendToUser = async (userId, { title, body, type = "SYSTEM", data = {}, pri
 
     if (validMessages.length > 0) {
       const { successCount, failureCount, tickets } = await sendRawExpoPush(validMessages);
-      notification.deliveryStatus = successCount > 0 ? "delivered" : failureCount > 0 ? "failed" : "sent";
+      notification.deliveryStatus =
+        successCount > 0 ? "delivered" : failureCount > 0 ? "failed" : "sent";
       if (tickets[0]?.id) {
         notification.receiptId = tickets[0].id;
       }
@@ -128,6 +147,71 @@ const sendToUser = async (userId, { title, body, type = "SYSTEM", data = {}, pri
     return notification;
   } catch (error) {
     console.error(`[PushNotification] sendToUser error (${userId}):`, error.message);
+    return null;
+  }
+};
+
+/**
+ * Unified notification helper
+ */
+const createNotification = async ({
+  userId,
+  recipientId,
+  title,
+  body,
+  type = "SYSTEM",
+  data = {},
+  priority = "high",
+  sound = "default",
+  channelId = "default",
+}) => {
+  const targetUserId = userId || recipientId;
+  return await sendToUser(targetUserId, {
+    title,
+    body,
+    type,
+    data,
+    priority,
+    sound,
+    channelId,
+  });
+};
+
+/**
+ * Driver Partner Application Status Notification
+ */
+const sendDriverKYCNotification = async (userId, status, reason = "") => {
+  try {
+    if (!userId) return null;
+    let title = "";
+    let body = "";
+    let type = "";
+    let screen = "DriverHub";
+
+    if (status === "approved") {
+      title = "Driver Partner Application Approved! 🚗";
+      body = "Congratulations! Your driver application has been approved. You are now an active Kalki Sena driver partner.";
+      type = "DRIVER_KYC_APPROVED";
+      screen = "DriverHub";
+    } else if (status === "rejected") {
+      title = "Driver Application Update";
+      body = `Your driver partner application was not approved.${reason ? " Reason: " + reason : ""}`;
+      type = "DRIVER_KYC_REJECTED";
+      screen = "DriverApplication";
+    } else {
+      return null;
+    }
+
+    return await sendToUser(userId, {
+      title,
+      body,
+      type,
+      data: { screen },
+      priority: "high",
+      channelId: "default",
+    });
+  } catch (err) {
+    console.error("[PushNotification] sendDriverKYCNotification error:", err.message);
     return null;
   }
 };
@@ -295,6 +379,7 @@ const sendBroadcast = async ({
     // 3. Create in-app Notification records for all recipients in bulk
     const notificationDocs = recipientIds.map((userId) => ({
       recipient: userId,
+      user: userId,
       title,
       body,
       type: "BROADCAST",
@@ -320,9 +405,10 @@ const sendBroadcast = async ({
     // 5. Build Expo Push messages
     const pushMessages = [];
     for (const item of activeTokens) {
-      if (isValidExpoPushToken(item.token)) {
+      const activePushToken = item.expoPushToken || item.token;
+      if (isValidExpoPushToken(activePushToken)) {
         pushMessages.push({
-          to: item.token,
+          to: activePushToken,
           sound: sound || "default",
           title,
           body,
@@ -364,7 +450,9 @@ const sendBroadcast = async ({
 module.exports = {
   isValidExpoPushToken,
   sendRawExpoPush,
+  createNotification,
   sendToUser,
   sendOrderNotification,
+  sendDriverKYCNotification,
   sendBroadcast,
 };
